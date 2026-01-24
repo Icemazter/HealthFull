@@ -467,12 +467,6 @@ export default function ScanScreen() {
           </View>
         </CameraView>
       )}
-              }}>
-              <Text style={styles.cancelText}>✕ Cancel</Text>
-            </Pressable>
-          </View>
-        </CameraView>
-      )}
 
       <Modal
         visible={showOptions}
