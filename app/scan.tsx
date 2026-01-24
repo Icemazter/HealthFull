@@ -1,10 +1,12 @@
 import { Palette } from '@/constants/theme';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useAppTheme } from '@/hooks/use-theme';
+import { feedback } from '@/utils/feedback';
+import { storage, STORAGE_KEYS } from '@/utils/storage';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Haptics from 'expo-haptics';
-import { router } from 'expo-router';
-import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Animated, Image, Keyboard, KeyboardAvoidingView, Modal, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableWithoutFeedback, useColorScheme, View } from 'react-native';
+import { router, useFocusEffect } from 'expo-router';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Animated, Image, Keyboard, KeyboardAvoidingView, Modal, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableWithoutFeedback, View } from 'react-native';
 
 interface NutrientData {
   calories: number;
@@ -23,9 +25,7 @@ interface FoodData {
 }
 
 export default function ScanScreen() {
-  const systemColorScheme = useColorScheme();
-  const [colorScheme, setColorScheme] = useState<'light' | 'dark' | null>(null);
-  const isDark = colorScheme === 'dark' || (colorScheme === null && systemColorScheme === 'dark');
+  const { isDark } = useAppTheme();
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -66,12 +66,6 @@ export default function ScanScreen() {
   ).current;
 
   useEffect(() => {
-    const loadDarkMode = async () => {
-      const darkPref = await AsyncStorage.getItem('dark_mode_preference');
-      if (darkPref) setColorScheme(JSON.parse(darkPref));
-    };
-    loadDarkMode();
-
     // Initialize web camera if on web platform
     if (isWeb) {
       initWebCamera();
@@ -88,6 +82,27 @@ export default function ScanScreen() {
       }
     };
   }, [isWeb]);
+
+  // Reset scanned state when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      setScanned(false);
+      setLoading(false);
+      
+      // Restart web scanning if needed
+      if (isWeb && !scanIntervalRef.current) {
+        startBarcodeScanning();
+      }
+      
+      return () => {
+        // Cleanup when losing focus
+        if (scanIntervalRef.current) {
+          clearInterval(scanIntervalRef.current);
+          scanIntervalRef.current = null;
+        }
+      };
+    }, [isWeb])
+  );
 
   // Convert units for baking/powders
   const convertServingSize = (value: string, from: string, to: string): string => {
@@ -116,7 +131,7 @@ export default function ScanScreen() {
       const permissionStatus = await navigator.permissions.query({ name: 'camera' as PermissionName });
       
       if (permissionStatus.state === 'denied') {
-        Alert.alert('Camera Access Denied', 'Please enable camera access in your browser settings to scan barcodes.');
+        await feedback.alert('Camera Access Denied', 'Please enable camera access in your browser settings to scan barcodes.');
         return;
       }
 
@@ -137,7 +152,7 @@ export default function ScanScreen() {
       }
     } catch (error) {
       console.error('Error accessing camera:', error);
-      Alert.alert('Camera Error', 'Could not access camera. Please check permissions in your browser settings.');
+      await feedback.alert('Camera Error', 'Could not access camera. Please check permissions in your browser settings.');
     }
   };
 
@@ -168,7 +183,7 @@ export default function ScanScreen() {
               const barcodes = await barcodeDetector.detect(imageData);
               
               if (barcodes.length > 0) {
-                handleBarCodeScanned({ data: barcodes[0].rawValue });
+                handleBarCodeScanned({ type: barcodes[0].format, data: barcodes[0].rawValue });
               }
             } catch (err) {
               console.log('Barcode detection error:', err);
@@ -185,8 +200,10 @@ export default function ScanScreen() {
 
   if (!permission.granted) {
     return (
-      <View style={styles.container}>
-        <Text style={styles.message}>Camera permission is required to scan barcodes</Text>
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <Text style={[styles.message, { marginBottom: 20, textAlign: 'center', paddingHorizontal: 20 }]}>
+          Camera permission is required to scan barcodes
+        </Text>
         <Pressable style={styles.button} onPress={requestPermission}>
           <Text style={styles.buttonText}>Grant Permission</Text>
         </Pressable>
@@ -194,8 +211,10 @@ export default function ScanScreen() {
     );
   }
 
-  const handleBarCodeScanned = async ({ data }: { data: string }) => {
+  const handleBarCodeScanned = async (result: { type: string; data: string }) => {
     if (scanned || loading) return;
+    
+    console.log('Barcode scanned:', result.data);
     
     setScanned(true);
     setLoading(true);
@@ -211,6 +230,8 @@ export default function ScanScreen() {
       if (!isWeb) {
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
+      
+      const data = result.data;
 
       // Fetch from OpenFoodFacts API
       const response = await fetch(`https://world.openfoodfacts.org/api/v2/product/${data}.json`);
@@ -257,7 +278,7 @@ export default function ScanScreen() {
         if (!isWeb) {
           await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
         }
-        Alert.alert('Product Not Found', 'Could not find nutrition data for this barcode.');
+        await feedback.alert('Product Not Found', 'Could not find nutrition data for this barcode.');
         setScanned(false);
         // Restart scanning on web
         if (isWeb) {
@@ -269,7 +290,7 @@ export default function ScanScreen() {
       if (!isWeb) {
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       }
-      Alert.alert('Error', 'Failed to fetch product data. Please try again.');
+      await feedback.alert('Error', 'Failed to fetch product data. Please try again.');
       setScanned(false);
       // Restart scanning on web
       if (isWeb) {
@@ -284,8 +305,7 @@ export default function ScanScreen() {
     if (!foodData) return;
 
     try {
-      const stored = await AsyncStorage.getItem('food_entries');
-      const entries = stored ? JSON.parse(stored) : [];
+      const entries = await storage.get<any[]>(STORAGE_KEYS.FOOD_ENTRIES, []);
       
       const totalWeight = totalGrams > 0 ? totalGrams : parseFloat(customAmount) || 100;
       const multiplier = totalWeight / 100; // Convert grams to 100g units
@@ -300,7 +320,7 @@ export default function ScanScreen() {
         timestamp: Date.now(),
         mealType: mealType,
       });
-      await AsyncStorage.setItem('food_entries', JSON.stringify(entries));
+      await storage.set(STORAGE_KEYS.FOOD_ENTRIES, entries);
       
       // Success haptic and feedback
       if (!isWeb) {
@@ -315,7 +335,7 @@ export default function ScanScreen() {
       if (!isWeb) {
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       }
-      Alert.alert('Error', 'Failed to save food entry.');
+      await feedback.alert('Error', 'Failed to save food entry.');
     }
   };
 
@@ -325,7 +345,7 @@ export default function ScanScreen() {
       if (!isWeb) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       }
-      Alert.alert('Invalid Amount', `Please enter a valid weight in ${unitType}.`);
+      feedback.alert('Invalid Amount', `Please enter a valid weight in ${unitType}.`);
       return;
     }
     if (!isWeb) {
@@ -400,15 +420,17 @@ export default function ScanScreen() {
             barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e'],
           }}
           onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
+          enableTorch={false}
         >
           <View style={styles.overlay}>
             <View style={styles.scanArea}>
               {loading && <ActivityIndicator size="large" color="#fff" style={styles.scanAreaLoader} />}
             </View>
             <Text style={styles.instruction}>
-              {loading ? '✓ Scanning...' : '📷 Align barcode'}
+              {loading ? '✓ Scanning...' : scanned ? '✓ Scanned!' : '📷 Align barcode with the center frame'}
             </Text>
             {loading && <Text style={styles.loadingText}>Looking up product data</Text>}
+            {scanned && !loading && <Text style={styles.loadingText}>Barcode detected</Text>}
             <Pressable
               style={styles.cancelButton}
               onPress={() => {

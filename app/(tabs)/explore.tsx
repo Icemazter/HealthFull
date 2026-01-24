@@ -1,12 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { StyleSheet, ScrollView, View, Text, Pressable, useColorScheme } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { router } from 'expo-router';
-import { MUSCLE_COLORS } from '@/constants/exercises';
 import { Palette } from '@/constants/theme';
+import { useAppTheme } from '@/hooks/use-theme';
+import { storage, STORAGE_KEYS } from '@/utils/storage';
+import { router } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface Routine {
   id: string;
@@ -24,9 +24,7 @@ interface WorkoutTemplate {
 
 export default function WorkoutHubScreen() {
   const insets = useSafeAreaInsets();
-  const systemColorScheme = useColorScheme();
-  const [colorScheme, setColorScheme] = useState<'light' | 'dark' | null>(null);
-  const isDark = colorScheme === 'dark' || (colorScheme === null && systemColorScheme === 'dark');
+  const { isDark } = useAppTheme();
   const [recentRoutines, setRecentRoutines] = useState<Routine[]>([]);
   const [workoutHistory, setWorkoutHistory] = useState<any[]>([]);
   const [templates, setTemplates] = useState<WorkoutTemplate[]>([]);
@@ -37,34 +35,17 @@ export default function WorkoutHubScreen() {
 
   const loadData = async () => {
     try {
-      const darkPref = await AsyncStorage.getItem('dark_mode_preference');
-      if (darkPref) setColorScheme(JSON.parse(darkPref));
+      const routines = await storage.get<Routine[]>(STORAGE_KEYS.WORKOUT_ROUTINES, []);
+      setRecentRoutines(routines.slice(0, 3));
       
-      const routinesData = await AsyncStorage.getItem('workout_routines');
-      const historyData = await AsyncStorage.getItem('workout_history');
-      const templatesData = await AsyncStorage.getItem('workout_templates');
+      const history = await storage.get<any[]>(STORAGE_KEYS.WORKOUT_HISTORY, []);
+      setWorkoutHistory(history);
       
-      if (routinesData) {
-        const routines = JSON.parse(routinesData);
-        setRecentRoutines(routines.slice(0, 3));
-      }
-      
-      if (historyData) {
-        setWorkoutHistory(JSON.parse(historyData));
-      }
-
-      if (templatesData) {
-        setTemplates(JSON.parse(templatesData));
-      }
+      const templatesData = await storage.get<WorkoutTemplate[]>(STORAGE_KEYS.WORKOUT_TEMPLATES, []);
+      setTemplates(templatesData);
     } catch (error) {
       console.error('Failed to load workout data:', error);
     }
-  };
-
-  const toggleDarkMode = async () => {
-    const newMode = colorScheme === 'dark' ? 'light' : colorScheme === 'light' ? null : 'dark';
-    setColorScheme(newMode);
-    await AsyncStorage.setItem('dark_mode_preference', JSON.stringify(newMode));
   };
 
   const startEmptyWorkout = () => {

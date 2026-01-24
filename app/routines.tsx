@@ -1,20 +1,20 @@
-import React, { useState, useEffect } from 'react';
-import {
-  StyleSheet,
-  ScrollView,
-  View,
-  Text,
-  Pressable,
-  TextInput,
-  Alert,
-  Modal,
-  TouchableWithoutFeedback,
-  Keyboard,
-} from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { router } from 'expo-router';
-import { ThemedText } from '@/components/themed-text';
 import { EXERCISES } from '@/constants/exercises';
+import { useAppTheme } from '@/hooks/use-theme';
+import { feedback } from '@/utils/feedback';
+import { storage, STORAGE_KEYS } from '@/utils/storage';
+import { router } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import {
+    Keyboard,
+    Modal,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableWithoutFeedback,
+    View,
+} from 'react-native';
 
 interface Routine {
   id: string;
@@ -25,6 +25,7 @@ interface Routine {
 }
 
 export default function RoutinesScreen() {
+  const { isDark } = useAppTheme();
   const [routines, setRoutines] = useState<Routine[]>([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newRoutineName, setNewRoutineName] = useState('');
@@ -37,10 +38,8 @@ export default function RoutinesScreen() {
 
   const loadRoutines = async () => {
     try {
-      const stored = await AsyncStorage.getItem('workout_routines');
-      if (stored) {
-        setRoutines(JSON.parse(stored));
-      }
+      const stored = await storage.get<Routine[]>(STORAGE_KEYS.WORKOUT_ROUTINES, []);
+      setRoutines(stored);
     } catch (error) {
       console.error('Failed to load routines:', error);
     }
@@ -48,12 +47,12 @@ export default function RoutinesScreen() {
 
   const saveRoutine = async () => {
     if (!newRoutineName.trim()) {
-      Alert.alert('Name Required', 'Please enter a routine name.');
+      await feedback.alert('Name Required', 'Please enter a routine name.');
       return;
     }
 
     if (selectedExercises.length === 0) {
-      Alert.alert('No Exercises', 'Please add at least one exercise.');
+      await feedback.alert('No Exercises', 'Please add at least one exercise.');
       return;
     }
 
@@ -66,34 +65,28 @@ export default function RoutinesScreen() {
 
     try {
       const newRoutines = [...routines, routine];
-      await AsyncStorage.setItem('workout_routines', JSON.stringify(newRoutines));
+      await storage.set(STORAGE_KEYS.WORKOUT_ROUTINES, newRoutines);
       setRoutines(newRoutines);
       setShowCreateModal(false);
       setNewRoutineName('');
       setSelectedExercises([]);
-      Alert.alert('Success', 'Routine created!');
+      await feedback.alert('Success', 'Routine created!');
     } catch (error) {
-      Alert.alert('Error', 'Failed to save routine.');
+      await feedback.alert('Error', 'Failed to save routine.');
     }
   };
 
   const deleteRoutine = async (id: string) => {
-    Alert.alert('Delete Routine', 'Are you sure?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            const newRoutines = routines.filter(r => r.id !== id);
-            await AsyncStorage.setItem('workout_routines', JSON.stringify(newRoutines));
-            setRoutines(newRoutines);
-          } catch (error) {
-            Alert.alert('Error', 'Failed to delete routine.');
-          }
-        },
-      },
-    ]);
+    const shouldDelete = await feedback.confirm('Delete Routine', 'Are you sure?');
+    if (shouldDelete) {
+      try {
+        const newRoutines = routines.filter(r => r.id !== id);
+        await storage.set(STORAGE_KEYS.WORKOUT_ROUTINES, newRoutines);
+        setRoutines(newRoutines);
+      } catch (error) {
+        await feedback.alert('Error', 'Failed to delete routine.');
+      }
+    }
   };
 
   const toggleExercise = (exerciseId: string) => {

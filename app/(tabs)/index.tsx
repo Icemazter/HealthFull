@@ -1,23 +1,16 @@
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Palette } from '@/constants/theme';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { FoodEntry, useFoodManager } from '@/hooks/use-food-manager';
+import { usePersistedState } from '@/hooks/use-persisted-state';
+import { useAppTheme } from '@/hooks/use-theme';
+import { feedback } from '@/utils/feedback';
+import { STORAGE_KEYS } from '@/utils/storage';
+import { useFocusEffect } from '@react-navigation/native';
 import { router } from 'expo-router';
-import React, { useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, useColorScheme, View } from 'react-native';
+import React, { useCallback, useMemo, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
-interface FoodEntry {
-  id: string;
-  name: string;
-  calories: number;
-  protein: number;
-  carbs: number;
-  fat: number;
-  timestamp: number;
-  mealType?: 'Breakfast' | 'Lunch' | 'Dinner' | 'Snack';
-  isFavorite?: boolean;
-}
 
 const mealOrder: Array<'Breakfast' | 'Lunch' | 'Dinner' | 'Snack' | 'Other'> = [
   'Breakfast',
@@ -27,32 +20,23 @@ const mealOrder: Array<'Breakfast' | 'Lunch' | 'Dinner' | 'Snack' | 'Other'> = [
   'Other',
 ];
 
-import { useFocusEffect } from '@react-navigation/native';
-
 export default function HomeScreen() {
-  const systemColorScheme = useColorScheme();
-  const [colorScheme, setColorScheme] = useState<'light' | 'dark' | null>(null);
-  const isDark = colorScheme === 'dark' || (colorScheme === null && systemColorScheme === 'dark');
-  const [entries, setEntries] = useState<FoodEntry[]>([]);
-  const [favorites, setFavorites] = useState<FoodEntry[]>([]);
-  const [totals, setTotals] = useState({ calories: 0, protein: 0, carbs: 0, fat: 0 });
-  const [goals, setGoals] = useState({ calories: 2000, protein: 150, carbs: 200, fat: 65 });
-  const [water, setWater] = useState(0);
-  const [diabetesMode, setDiabetesMode] = useState(false);
+  const { isDark, toggleTheme } = useAppTheme();
+  const foodManager = useFoodManager();
+  const [goals, setGoals] = usePersistedState({ calories: 2000, protein: 150, carbs: 200, fat: 65 }, STORAGE_KEYS.MACRO_GOALS);
+  const [diabetesMode] = usePersistedState(false, STORAGE_KEYS.DIABETES_MODE);
   const [focusedMacro, setFocusedMacro] = useState<'calories' | 'protein' | 'carbs' | 'fat'>('calories');
   const insets = useSafeAreaInsets();
 
   useFocusEffect(
-    React.useCallback(() => {
-      loadTodayEntries();
-      loadGoalsAndWater();
-      loadFavorites();
+    useCallback(() => {
+      // Force re-render when screen is focused to update entries
     }, [])
   );
 
   const groupedEntries = useMemo(() => {
     const groups: Record<string, FoodEntry[]> = {};
-    entries.forEach((entry) => {
+    foodManager.entries.forEach((entry) => {
       const key = entry.mealType && mealOrder.includes(entry.mealType) ? entry.mealType : 'Other';
       if (!groups[key]) groups[key] = [];
       groups[key].push(entry);
@@ -61,199 +45,31 @@ export default function HomeScreen() {
     return mealOrder
       .map((meal) => ({ meal, items: groups[meal] || [] }))
       .filter((section) => section.items.length > 0);
-  }, [entries]);
+  }, [foodManager.entries]);
 
-  const loadGoalsAndWater = async () => {
-    try {
-      const goalsData = await AsyncStorage.getItem('macro_goals');
-      const waterData = await AsyncStorage.getItem('water_today');
-      const diabetesEnabled = await AsyncStorage.getItem('diabetes_mode');
-      const darkModeData = await AsyncStorage.getItem('dark_mode_preference');
-      
-      if (darkModeData) {
-        setColorScheme(JSON.parse(darkModeData));
-      }
-      
-      if (goalsData) {
-        const parsed = JSON.parse(goalsData);
-        setGoals({
-          calories: parseFloat(parsed.calories) || 2000,
-          protein: parseFloat(parsed.protein) || 150,
-          carbs: parseFloat(parsed.carbs) || 200,
-          fat: parseFloat(parsed.fat) || 65,
-        });
-      }
-      
-      if (waterData) {
-        const { date, amount } = JSON.parse(waterData);
-        if (date === new Date().toDateString()) {
-          setWater(amount);
-        } else {
-          setWater(0);
-          await AsyncStorage.setItem('water_today', JSON.stringify({ date: new Date().toDateString(), amount: 0 }));
-        }
-      }
-    } catch (error) {
-      console.error('Failed to load goals:', error);
-    }
-  };
-
-  const toggleDarkMode = async () => {
-    const newMode = colorScheme === 'dark' ? 'light' : colorScheme === 'light' ? null : 'dark';
-    setColorScheme(newMode);
-    await AsyncStorage.setItem('dark_mode_preference', JSON.stringify(newMode));
-  };
-
-  const addWater = async (amount: number) => {
-    const newAmount = water + amount;
-    setWater(newAmount);
-    await AsyncStorage.setItem('water_today', JSON.stringify({ 
-      date: new Date().toDateString(), 
-      amount: newAmount 
-    }));
-  };
-
-  const clearToday = () => {
-    Alert.alert(
+  const handleClearToday = useCallback(() => {
+    feedback.confirm(
       'Clear Today\'s Entries',
       'This will remove all food items logged today. This cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Clear',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const stored = await AsyncStorage.getItem('food_entries');
-              if (stored) {
-                const allEntries: FoodEntry[] = JSON.parse(stored);
-                const today = new Date().toDateString();
-                const filteredEntries = allEntries.filter(
-                  entry => new Date(entry.timestamp).toDateString() !== today
-                );
-                await AsyncStorage.setItem('food_entries', JSON.stringify(filteredEntries));
-                loadTodayEntries();
-              }
-            } catch (error) {
-              Alert.alert('Error', 'Failed to clear entries.');
-            }
-          },
-        },
-      ]
+      () => foodManager.clearToday()
     );
-  };
+  }, [foodManager]);
 
-  const removeEntry = (id: string) => {
-    Alert.alert('Remove Entry', 'Remove this food item?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Remove',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            const stored = await AsyncStorage.getItem('food_entries');
-            if (stored) {
-              const allEntries: FoodEntry[] = JSON.parse(stored);
-              const filtered = allEntries.filter(e => e.id !== id);
-              await AsyncStorage.setItem('food_entries', JSON.stringify(filtered));
-              loadTodayEntries();
-            }
-          } catch (error) {
-            Alert.alert('Error', 'Failed to remove entry.');
-          }
-        },
-      },
-    ]);
-  };
-
-  const loadFavorites = async () => {
-    try {
-      const stored = await AsyncStorage.getItem('food_favorites');
-      if (stored) {
-        setFavorites(JSON.parse(stored));
-      }
-    } catch (error) {
-      console.error('Failed to load favorites:', error);
-    }
-  };
-
-  const toggleFavorite = async (item: FoodEntry) => {
-    try {
-      let updated = [...favorites];
-      const isFav = favorites.some(f => f.name === item.name && f.calories === item.calories);
-      
-      if (isFav) {
-        updated = updated.filter(f => !(f.name === item.name && f.calories === item.calories));
-      } else {
-        // Remove timestamp for favorites to avoid duplicates
-        updated.push({
-          ...item,
-          id: `fav_${Date.now()}`,
-          timestamp: Date.now(),
-          isFavorite: true,
-        });
-      }
-      
-      setFavorites(updated);
-      await AsyncStorage.setItem('food_favorites', JSON.stringify(updated));
-    } catch (error) {
-      Alert.alert('Error', 'Failed to save favorite.');
-    }
-  };
-
-  const addFavoriteToday = async (favorite: FoodEntry) => {
-    try {
-      const newEntry: FoodEntry = {
-        ...favorite,
-        id: `entry_${Date.now()}`,
-        timestamp: Date.now(),
-      };
-      
-      const stored = await AsyncStorage.getItem('food_entries');
-      const allEntries: FoodEntry[] = stored ? JSON.parse(stored) : [];
-      allEntries.push(newEntry);
-      
-      await AsyncStorage.setItem('food_entries', JSON.stringify(allEntries));
-      loadTodayEntries();
-    } catch (error) {
-      Alert.alert('Error', 'Failed to add favorite.');
-    }
-  };
-
-  const loadTodayEntries = async () => {
-    try {
-      const stored = await AsyncStorage.getItem('food_entries');
-      if (stored) {
-        const allEntries: FoodEntry[] = JSON.parse(stored);
-        const today = new Date().toDateString();
-        const todayEntries = allEntries.filter(
-          entry => new Date(entry.timestamp).toDateString() === today
-        );
-        setEntries(todayEntries);
-        
-        const totals = todayEntries.reduce(
-          (acc, entry) => ({
-            calories: acc.calories + entry.calories,
-            protein: acc.protein + entry.protein,
-            carbs: acc.carbs + entry.carbs,
-            fat: acc.fat + entry.fat,
-          }),
-          { calories: 0, protein: 0, carbs: 0, fat: 0 }
-        );
-        setTotals(totals);
-      }
-    } catch (error) {
-      console.error('Failed to load entries:', error);
-    }
-  };
+  const handleRemoveEntry = useCallback((id: string) => {
+    feedback.confirm(
+      'Remove Entry',
+      'Remove this food item?',
+      () => foodManager.removeEntry(id)
+    );
+  }, [foodManager]);
 
   return (
     <>
       <ScrollView style={[styles.container, isDark && styles.containerDark]}>
       <ThemedView style={[styles.header, isDark && styles.headerDark, { paddingTop: Math.max(insets.top, 16) }]}>
         <ThemedText type="title" style={[styles.headerTitle, isDark && styles.headerTitleDark]}>Today's Nutrition</ThemedText>
-        <Pressable style={styles.themeToggle} onPress={toggleDarkMode}>
-          <Text style={styles.themeToggleIcon}>{colorScheme === 'dark' ? '☀️' : colorScheme === 'light' ? '🌙' : '🌗'}</Text>
+        <Pressable style={styles.themeToggle} onPress={toggleTheme}>
+          <Text style={styles.themeToggleIcon}>{isDark ? '☀️' : '🌙'}</Text>
         </Pressable>
       </ThemedView>
 
@@ -267,27 +83,27 @@ export default function HomeScreen() {
               {focusedMacro === 'fat' && 'Fat'}
             </Text>
             <Text style={styles.totalValue}>
-              {focusedMacro === 'calories' && `${Math.round(totals.calories)} / ${goals.calories}`}
-              {focusedMacro === 'protein' && `${Math.round(totals.protein)}g / ${goals.protein}g`}
-              {focusedMacro === 'carbs' && `${Math.round(totals.carbs)}g / ${goals.carbs}g`}
-              {focusedMacro === 'fat' && `${Math.round(totals.fat)}g / ${goals.fat}g`}
+              {focusedMacro === 'calories' && `${Math.round(foodManager.totals.calories)} / ${goals.calories}`}
+              {focusedMacro === 'protein' && `${Math.round(foodManager.totals.protein)}g / ${goals.protein}g`}
+              {focusedMacro === 'carbs' && `${Math.round(foodManager.totals.carbs)}g / ${goals.carbs}g`}
+              {focusedMacro === 'fat' && `${Math.round(foodManager.totals.fat)}g / ${goals.fat}g`}
             </Text>
           </View>
           <Text style={styles.percentageText}>
-            {focusedMacro === 'calories' && `${Math.round((totals.calories / goals.calories) * 100)}%`}
-            {focusedMacro === 'protein' && `${Math.round((totals.protein / goals.protein) * 100)}%`}
-            {focusedMacro === 'carbs' && `${Math.round((totals.carbs / goals.carbs) * 100)}%`}
-            {focusedMacro === 'fat' && `${Math.round((totals.fat / goals.fat) * 100)}%`}
+            {focusedMacro === 'calories' && `${Math.round((foodManager.totals.calories / goals.calories) * 100)}%`}
+            {focusedMacro === 'protein' && `${Math.round((foodManager.totals.protein / goals.protein) * 100)}%`}
+            {focusedMacro === 'carbs' && `${Math.round((foodManager.totals.carbs / goals.carbs) * 100)}%`}
+            {focusedMacro === 'fat' && `${Math.round((foodManager.totals.fat / goals.fat) * 100)}%`}
           </Text>
         </View>
         <View style={styles.progressBarContainer}>
           <View 
             style={[
               styles.progressBar,
-              focusedMacro === 'calories' && { width: `${Math.min((totals.calories / goals.calories) * 100, 100)}%` },
-              focusedMacro === 'protein' && { width: `${Math.min((totals.protein / goals.protein) * 100, 100)}%` },
-              focusedMacro === 'carbs' && { width: `${Math.min((totals.carbs / goals.carbs) * 100, 100)}%` },
-              focusedMacro === 'fat' && { width: `${Math.min((totals.fat / goals.fat) * 100, 100)}%` },
+              focusedMacro === 'calories' && { width: `${Math.min((foodManager.totals.calories / goals.calories) * 100, 100)}%` },
+              focusedMacro === 'protein' && { width: `${Math.min((foodManager.totals.protein / goals.protein) * 100, 100)}%` },
+              focusedMacro === 'carbs' && { width: `${Math.min((foodManager.totals.carbs / goals.carbs) * 100, 100)}%` },
+              focusedMacro === 'fat' && { width: `${Math.min((foodManager.totals.fat / goals.fat) * 100, 100)}%` },
             ]} 
           />
         </View>
@@ -298,7 +114,7 @@ export default function HomeScreen() {
               style={styles.macroItem}
               onPress={() => setFocusedMacro('protein')}>
               <Text style={styles.macroLabel}>Protein</Text>
-              <Text style={styles.macroValue}>{Math.round(totals.protein)}g</Text>
+              <Text style={styles.macroValue}>{Math.round(foodManager.totals.protein)}g</Text>
               <Text style={styles.macroGoal}>/{goals.protein}g</Text>
             </Pressable>
           )}
@@ -307,7 +123,7 @@ export default function HomeScreen() {
               style={styles.macroItem}
               onPress={() => setFocusedMacro('carbs')}>
               <Text style={styles.macroLabel}>Carbs</Text>
-              <Text style={[styles.macroValue, diabetesMode && styles.macroValueHighlight]}>{Math.round(totals.carbs)}g</Text>
+              <Text style={[styles.macroValue, diabetesMode && styles.macroValueHighlight]}>{Math.round(foodManager.totals.carbs)}g</Text>
               <Text style={styles.macroGoal}>/{goals.carbs}g</Text>
             </Pressable>
           )}
@@ -316,7 +132,7 @@ export default function HomeScreen() {
               style={styles.macroItem}
               onPress={() => setFocusedMacro('fat')}>
               <Text style={styles.macroLabel}>Fat</Text>
-              <Text style={styles.macroValue}>{Math.round(totals.fat)}g</Text>
+              <Text style={styles.macroValue}>{Math.round(foodManager.totals.fat)}g</Text>
               <Text style={styles.macroGoal}>/{goals.fat}g</Text>
             </Pressable>
           )}
@@ -325,7 +141,7 @@ export default function HomeScreen() {
               style={styles.macroItem}
               onPress={() => setFocusedMacro('calories')}>
               <Text style={styles.macroLabel}>Calories</Text>
-              <Text style={styles.macroValue}>{Math.round(totals.calories)}</Text>
+              <Text style={styles.macroValue}>{Math.round(foodManager.totals.calories)}</Text>
               <Text style={styles.macroGoal}>/{goals.calories}</Text>
             </Pressable>
           )}
@@ -335,24 +151,24 @@ export default function HomeScreen() {
       {/* Water Tracker */}
       <View style={[styles.waterCard, isDark && styles.waterCardDark]}>
         <Text style={[styles.waterTitle, isDark && styles.waterTitleDark]}>💧 Water Intake</Text>
-        <Text style={[styles.waterAmount, isDark && styles.waterAmountDark]}>{water}ml / 2000ml</Text>
+        <Text style={[styles.waterAmount, isDark && styles.waterAmountDark]}>{foodManager.water}ml / 2000ml</Text>
         <View style={styles.progressBarContainer}>
           <View 
             style={[
               styles.progressBar,
               styles.waterProgressBar,
-              { width: `${Math.min((water / 2000) * 100, 100)}%` }
+              { width: `${Math.min((foodManager.water / 2000) * 100, 100)}%` }
             ]} 
           />
         </View>
         <View style={styles.waterButtons}>
-          <Pressable style={[styles.waterButton, isDark && styles.waterButtonDark]} onPress={() => addWater(250)}>
+          <Pressable style={[styles.waterButton, isDark && styles.waterButtonDark]} onPress={() => foodManager.addWater(250)}>
             <Text style={[styles.waterButtonText, isDark && styles.waterButtonTextDark]}>+250ml</Text>
           </Pressable>
-          <Pressable style={[styles.waterButton, isDark && styles.waterButtonDark]} onPress={() => addWater(500)}>
+          <Pressable style={[styles.waterButton, isDark && styles.waterButtonDark]} onPress={() => foodManager.addWater(500)}>
             <Text style={[styles.waterButtonText, isDark && styles.waterButtonTextDark]}>+500ml</Text>
           </Pressable>
-          <Pressable style={[styles.waterButton, isDark && styles.waterButtonDark]} onPress={() => addWater(-250)}>
+          <Pressable style={[styles.waterButton, isDark && styles.waterButtonDark]} onPress={() => foodManager.addWater(-250)}>
             <Text style={[styles.waterButtonText, isDark && styles.waterButtonTextDark]}>-250ml</Text>
           </Pressable>
         </View>
@@ -364,24 +180,24 @@ export default function HomeScreen() {
         <Text style={styles.scanButtonText}>Scan Barcode</Text>
       </Pressable>
 
-      {entries.length > 0 && (
+      {foodManager.entries.length > 0 && (
         <Pressable
           style={[styles.clearButton, isDark && styles.clearButtonDark]}
-          onPress={clearToday}>
+          onPress={handleClearToday}>
           <Text style={[styles.clearButtonText, isDark && styles.clearButtonTextDark]}>Clear Today's Entries</Text>
         </Pressable>
       )}
 
       {/* Favorites Section */}
-      {favorites.length > 0 && (
+      {foodManager.favorites.length > 0 && (
         <ThemedView style={[styles.favoritesSection, isDark && styles.favoritesSectionDark]}>
           <Text style={[styles.favoritesTitle, isDark && styles.favoritesTitleDark]}>⭐ Quick Add</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.favoritesScroll}>
-            {favorites.map((fav) => (
+            {foodManager.favorites.map((fav) => (
               <Pressable
                 key={fav.id}
                 style={[styles.favoriteChip, isDark && styles.favoriteChipDark]}
-                onPress={() => addFavoriteToday(fav)}>
+                onPress={() => foodManager.addFavoriteToday(fav)}>
                 <Text style={styles.favoriteChipName}>{fav.name}</Text>
                 <Text style={styles.favoriteChipCals}>{Math.round(fav.calories)} cal</Text>
               </Pressable>
@@ -392,7 +208,7 @@ export default function HomeScreen() {
 
       <ThemedView style={styles.listContainer}>
         <ThemedText type="subtitle" style={styles.listTitle}>Food Log</ThemedText>
-        {entries.length === 0 ? (
+        {foodManager.entries.length === 0 ? (
           <Text style={[styles.emptyText, isDark && styles.emptyTextDark]}>No entries yet. Tap "Scan Barcode" to add food.</Text>
         ) : (
           groupedEntries.map((section) => (
@@ -402,7 +218,7 @@ export default function HomeScreen() {
                 <Text style={[styles.mealCount, isDark && styles.mealCountDark]}>{section.items.length} item{section.items.length > 1 ? 's' : ''}</Text>
               </View>
               {section.items.map((item) => {
-                const isFav = favorites.some(f => f.name === item.name && f.calories === item.calories);
+                const isFav = foodManager.isFavorite(item);
                 return (
                   <View key={item.id} style={[styles.entryCard, isDark && styles.entryCardDark]}>
                     <View style={styles.entryContent}>
@@ -420,12 +236,12 @@ export default function HomeScreen() {
                     <View style={styles.entryActions}>
                       <Pressable
                         style={[styles.favoriteButton, isDark && styles.favoriteButtonDark]}
-                        onPress={() => toggleFavorite(item)}>
+                        onPress={() => foodManager.toggleFavorite(item)}>
                         <Text style={styles.favoriteButtonText}>{isFav ? '⭐' : '☆'}</Text>
                       </Pressable>
                       <Pressable
                         style={[styles.removeButton, isDark && styles.removeButtonDark]}
-                        onPress={() => removeEntry(item.id)}>
+                        onPress={() => handleRemoveEntry(item.id)}>
                         <Text style={[styles.removeButtonText, isDark && styles.removeButtonTextDark]}>✕</Text>
                       </Pressable>
                     </View>

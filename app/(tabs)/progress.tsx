@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { StyleSheet, ScrollView, View, Text, Pressable, useColorScheme } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Palette } from '@/constants/theme';
+import { useAppTheme } from '@/hooks/use-theme';
+import { storage, STORAGE_KEYS } from '@/utils/storage';
+import React, { useEffect, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface Achievement {
   id: string;
@@ -16,9 +17,7 @@ interface Achievement {
 
 export default function ProgressScreen() {
   const insets = useSafeAreaInsets();
-  const systemColorScheme = useColorScheme();
-  const [colorScheme, setColorScheme] = useState<'light' | 'dark' | null>(null);
-  const isDark = colorScheme === 'dark' || (colorScheme === null && systemColorScheme === 'dark');
+  const { isDark, toggleTheme, colorScheme } = useAppTheme();
   const [achievements, setAchievements] = useState<Achievement[]>([]);
   const [stats, setStats] = useState({
     totalWorkouts: 0,
@@ -90,14 +89,8 @@ export default function ProgressScreen() {
 
   const loadProgress = async () => {
     try {
-      const darkPref = await AsyncStorage.getItem('dark_mode_preference');
-      if (darkPref) setColorScheme(JSON.parse(darkPref));
-      
-      const workouts = await AsyncStorage.getItem('workout_history');
-      const foods = await AsyncStorage.getItem('food_entries');
-      
-      const workoutData = workouts ? JSON.parse(workouts) : [];
-      const foodData = foods ? JSON.parse(foods) : [];
+      const workoutData = await storage.get<any[]>(STORAGE_KEYS.WORKOUT_HISTORY, []);
+      const foodData = await storage.get<any[]>(STORAGE_KEYS.FOOD_ENTRIES, []);
       
       const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
       const weeklyWorkouts = workoutData.filter((w: any) => w.timestamp > weekAgo).length;
@@ -206,18 +199,12 @@ export default function ProgressScreen() {
     }
   };
 
-  const toggleDarkMode = async () => {
-    const newMode = colorScheme === 'dark' ? 'light' : colorScheme === 'light' ? null : 'dark';
-    setColorScheme(newMode);
-    await AsyncStorage.setItem('dark_mode_preference', JSON.stringify(newMode));
-  };
-
   return (
     <>
       <ScrollView style={[styles.container, isDark && styles.containerDark]}>
       <View style={[styles.header, isDark && styles.headerDark, { paddingTop: Math.max(insets.top, 16) }]}>
         <Text style={[styles.headerTitle, isDark && styles.headerTitleDark]}>Progress</Text>
-        <Pressable style={styles.themeToggle} onPress={toggleDarkMode}>
+        <Pressable style={styles.themeToggle} onPress={toggleTheme}>
           <Text style={styles.themeToggleIcon}>{colorScheme === 'dark' ? '☀️' : colorScheme === 'light' ? '🌙' : '🌗'}</Text>
         </Pressable>
       </View>

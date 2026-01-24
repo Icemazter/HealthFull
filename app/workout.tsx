@@ -1,39 +1,34 @@
-import React, { useState, useEffect } from 'react';
+import { EXERCISES, MUSCLE_COLORS, type Exercise } from '@/constants/exercises';
+import { useAppTheme } from '@/hooks/use-theme';
+import { feedback } from '@/utils/feedback';
+import { storage, STORAGE_KEYS } from '@/utils/storage';
 import {
-  StyleSheet,
-  ScrollView,
-  View,
-  Text,
-  Pressable,
-  TextInput,
-  Modal,
-  Alert,
-  TouchableWithoutFeedback,
-  Keyboard,
-  KeyboardAvoidingView,
-  Platform,
-  useColorScheme,
-} from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+    calculatePRs,
+    calculateSetVolume,
+    checkForNewPR,
+    ExerciseSession,
+    getLastWorkout,
+    WorkoutSet
+} from '@/utils/workoutCalculations';
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
-import { ThemedText } from '@/components/themed-text';
-import { EXERCISES, MUSCLE_COLORS, type Exercise } from '@/constants/exercises';
+import React, { useEffect, useState } from 'react';
 import {
-  WorkoutSet,
-  ExerciseSession,
-  PersonalRecords,
-  calculate1RM,
-  calculateSetVolume,
-  calculatePRs,
-  checkForNewPR,
-  getLastWorkout,
-} from '@/utils/workoutCalculations';
+    Keyboard,
+    KeyboardAvoidingView,
+    Modal,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableWithoutFeedback,
+    View,
+} from 'react-native';
 
 export default function WorkoutScreen() {
-  const systemColorScheme = useColorScheme();
-  const [colorScheme, setColorScheme] = useState<'light' | 'dark' | null>(null);
-  const isDark = colorScheme === 'dark' || (colorScheme === null && systemColorScheme === 'dark');
+  const { isDark } = useAppTheme();
   const [exercises, setExercises] = useState<ExerciseSession[]>([]);
   const [showExercisePicker, setShowExercisePicker] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -77,18 +72,11 @@ export default function WorkoutScreen() {
 
   const loadHistory = async () => {
     try {
-      const darkPref = await AsyncStorage.getItem('dark_mode_preference');
-      if (darkPref) setColorScheme(JSON.parse(darkPref));
+      const stored = await storage.get<any[]>(STORAGE_KEYS.WORKOUT_HISTORY, []);
+      setWorkoutHistory(stored);
       
-      const stored = await AsyncStorage.getItem('workout_history');
-      if (stored) {
-        setWorkoutHistory(JSON.parse(stored));
-      }
-      
-      const customExercisesData = await AsyncStorage.getItem('custom_exercises');
-      if (customExercisesData) {
-        setCustomExercises(JSON.parse(customExercisesData));
-      }
+      const customExercisesData = await storage.get<Exercise[]>(STORAGE_KEYS.CUSTOM_EXERCISES, []);
+      setCustomExercises(customExercisesData);
     } catch (error) {
       console.error('Failed to load history:', error);
     }
@@ -154,7 +142,7 @@ export default function WorkoutScreen() {
 
   const addCustomExercise = async () => {
     if (!customExerciseName.trim()) {
-      Alert.alert('Error', 'Please enter exercise name');
+      await feedback.alert('Error', 'Please enter exercise name');
       return;
     }
 
@@ -166,7 +154,7 @@ export default function WorkoutScreen() {
 
     const updated = [...customExercises, newCustomExercise];
     setCustomExercises(updated);
-    await AsyncStorage.setItem('custom_exercises', JSON.stringify(updated));
+    await storage.set(STORAGE_KEYS.CUSTOM_EXERCISES, updated);
     await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setCustomExerciseName('');
     setShowCustomInput(false);
@@ -228,7 +216,7 @@ export default function WorkoutScreen() {
     );
 
     if (completedExercises.length === 0) {
-      Alert.alert('No Sets Completed', 'Complete at least one set to save the workout.');
+      await feedback.alert('No Sets Completed', 'Complete at least one set to save the workout.');
       return;
     }
 
@@ -240,75 +228,49 @@ export default function WorkoutScreen() {
     };
 
     try {
-      const stored = await AsyncStorage.getItem('workout_history');
-      const history = stored ? JSON.parse(stored) : [];
+      const history = await storage.get<any[]>(STORAGE_KEYS.WORKOUT_HISTORY, []);
       history.push(workout);
-      await AsyncStorage.setItem('workout_history', JSON.stringify(history));
+      await storage.set(STORAGE_KEYS.WORKOUT_HISTORY, history);
 
-      Alert.alert(
+      const shouldSave = await feedback.confirm(
         'Workout Saved!',
-        'Save this as a template for next time?',
-        [
-          { text: 'Skip', onPress: () => router.back() },
-          {
-            text: 'Save as Template',
-            onPress: async () => {
-              // Prompt for template name
-              Alert.prompt(
-                'Template Name',
-                'Enter a name for this workout template:',
-                [
-                  { text: 'Cancel' },
-                  {
-                    text: 'Save',
-                    onPress: async (name: string | undefined) => {
-                      if (name && name.trim()) {
-                        const template: Exercise[] = exercises.map(ex => ({
-                          id: ex.exerciseId,
-                          name: EXERCISES.find(e => e.id === ex.exerciseId)?.name ||
-                                customExercises.find(c => c.id === ex.exerciseId)?.name ||
-                                ex.exerciseId,
-                          primary: EXERCISES.find(e => e.id === ex.exerciseId)?.primary ||
-                                  customExercises.find(c => c.id === ex.exerciseId)?.primary ||
-                                  'Chest',
-                        }));
-
-                        const newTemplate = {
-                          id: `template_${Date.now()}`,
-                          name: name.trim(),
-                          exercises: template.map(t => ({
-                            exerciseId: t.id,
-                            exerciseName: t.name,
-                          })),
-                          createdAt: Date.now(),
-                        };
-
-                        const templatesData = await AsyncStorage.getItem('workout_templates');
-                        const templates = templatesData ? JSON.parse(templatesData) : [];
-                        templates.push(newTemplate);
-                        await AsyncStorage.setItem('workout_templates', JSON.stringify(templates));
-                        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                        router.back();
-                      }
-                    },
-                  },
-                ],
-                'plain-text'
-              );
-            },
-          },
-        ]
+        'Save this as a template for next time?'
       );
+
+      if (shouldSave) {
+        const templateName = await feedback.prompt(
+          'Template Name',
+          'Enter a name for this workout template:'
+        );
+
+        if (templateName) {
+          const routines = await storage.get<any[]>(STORAGE_KEYS.WORKOUT_ROUTINES, []);
+          const template = {
+            id: Date.now().toString(),
+            name: templateName,
+            exercises: completedExercises.map(e => ({
+              exerciseId: e.exerciseId,
+              exerciseName: e.exerciseName,
+              sets: e.sets.length,
+            })),
+          };
+          routines.push(template);
+          await storage.set(STORAGE_KEYS.WORKOUT_ROUTINES, routines);
+          await feedback.alert('Success', `Template "${templateName}" saved!`);
+        }
+      }
+
+      router.back();
     } catch (error) {
-      Alert.alert('Error', 'Failed to save workout.');
+      await feedback.alert('Error', 'Failed to save workout.');
     }
   };
 
-  const cancelWorkout = () => {
-    Alert.alert('Cancel Workout', 'Are you sure? All progress will be lost.', [
-      { text: 'Keep Going', style: 'cancel' },
-      { text: 'Discard', style: 'destructive', onPress: () => router.back() },
-    ]);
+  const cancelWorkout = async () => {
+    const shouldCancel = await feedback.confirm('Cancel Workout', 'Are you sure? All progress will be lost.');
+    if (shouldCancel) {
+      router.back();
+    }
   };
 
   return (

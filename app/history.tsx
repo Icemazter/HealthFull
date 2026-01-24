@@ -1,9 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { StyleSheet, ScrollView, View, Text, Pressable } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { router } from 'expo-router';
 import { EXERCISES, MUSCLE_COLORS } from '@/constants/exercises';
+import { useAppTheme } from '@/hooks/use-theme';
+import { formatDate, formatDuration } from '@/utils/date';
+import { storage, STORAGE_KEYS } from '@/utils/storage';
 import { calculateSetVolume } from '@/utils/workoutCalculations';
+import { router } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 interface Workout {
   id: string;
@@ -13,6 +15,7 @@ interface Workout {
 }
 
 export default function HistoryScreen() {
+  const { isDark } = useAppTheme();
   const [workouts, setWorkouts] = useState<Workout[]>([]);
 
   useEffect(() => {
@@ -21,41 +24,11 @@ export default function HistoryScreen() {
 
   const loadHistory = async () => {
     try {
-      const stored = await AsyncStorage.getItem('workout_history');
-      if (stored) {
-        const history = JSON.parse(stored);
-        setWorkouts(history.reverse()); // Most recent first
-      }
+      const history = await storage.get<Workout[]>(STORAGE_KEYS.WORKOUT_HISTORY, []);
+      setWorkouts([...history].reverse()); // Most recent first
     } catch (error) {
       console.error('Failed to load history:', error);
     }
-  };
-
-  const formatDate = (timestamp: number) => {
-    const date = new Date(timestamp);
-    const today = new Date();
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
-
-    if (date.toDateString() === today.toDateString()) {
-      return 'Today';
-    } else if (date.toDateString() === yesterday.toDateString()) {
-      return 'Yesterday';
-    } else {
-      return date.toLocaleDateString('en-US', { 
-        month: 'short', 
-        day: 'numeric',
-        year: date.getFullYear() !== today.getFullYear() ? 'numeric' : undefined
-      });
-    }
-  };
-
-  const formatDuration = (ms: number) => {
-    const minutes = Math.floor(ms / 60000);
-    if (minutes < 60) return `${minutes}m`;
-    const hours = Math.floor(minutes / 60);
-    const remainingMinutes = minutes % 60;
-    return `${hours}h ${remainingMinutes}m`;
   };
 
   const calculateTotalVolume = (workout: Workout) => {
