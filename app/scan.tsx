@@ -434,20 +434,39 @@ export default function ScanScreen() {
             {/* Test button - remove after testing */}
             {!loading && !scanned && (
               <Pressable
-                style={[styles.cancelButton, { bottom: 120, backgroundColor: '#4CAF50' }]}
+                style={{
+                  position: 'absolute',
+                  bottom: 140,
+                  left: 20,
+                  right: 20,
+                  backgroundColor: '#4CAF50',
+                  paddingVertical: 12,
+                  paddingHorizontal: 20,
+                  borderRadius: 8,
+                  alignItems: 'center',
+                  zIndex: 100,
+                }}
                 onPress={() => {
-                  console.log('Test button pressed');
+                  console.log('Test button pressed - triggering test scan');
                   handleBarCodeScanned({ type: 'ean13', data: '5449000000996' });
                 }}>
-                <Text style={styles.cancelText}>🧪 Test Scan (Coca-Cola)</Text>
+                <Text style={{ color: '#fff', fontSize: 16, fontWeight: 'bold' }}>🧪 Test Scan (Coca-Cola)</Text>
               </Pressable>
             )}
             
             <Pressable
               style={styles.cancelButton}
               onPress={() => {
-                Haptics.selectionAsync();
+                if (!isWeb) {
+                  Haptics.selectionAsync();
+                }
                 router.back();
+              }}>
+              <Text style={styles.cancelText}>✕ Cancel</Text>
+            </Pressable>
+          </View>
+        </CameraView>
+      )}
               }}>
               <Text style={styles.cancelText}>✕ Cancel</Text>
             </Pressable>
