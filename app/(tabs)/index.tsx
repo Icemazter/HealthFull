@@ -23,8 +23,8 @@ const mealOrder: Array<'Breakfast' | 'Lunch' | 'Dinner' | 'Snack' | 'Other'> = [
 export default function HomeScreen() {
   const { isDark, toggleTheme } = useAppTheme();
   const foodManager = useFoodManager();
-  const [goals, setGoals] = usePersistedState({ calories: 2000, protein: 150, carbs: 200, fat: 65 }, STORAGE_KEYS.MACRO_GOALS);
-  const [diabetesMode] = usePersistedState(false, STORAGE_KEYS.DIABETES_MODE);
+  const [goals, setGoals] = usePersistedState(STORAGE_KEYS.MACRO_GOALS, { calories: 2000, protein: 150, carbs: 200, fat: 65 });
+  const [diabetesMode] = usePersistedState(STORAGE_KEYS.DIABETES_MODE, false);
   const [focusedMacro, setFocusedMacro] = useState<'calories' | 'protein' | 'carbs' | 'fat'>('calories');
   const insets = useSafeAreaInsets();
 
