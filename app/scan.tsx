@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, Text, Pressable, ActivityIndicator, Alert, TextInput, Modal, Image, TouchableWithoutFeedback, Keyboard, ScrollView, PanResponder, Animated, KeyboardAvoidingView, Platform, useColorScheme } from 'react-native';
-import { CameraView, useCameraPermissions } from 'expo-camera';
-import { router } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as Haptics from 'expo-haptics';
 import { Palette } from '@/constants/theme';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { CameraView, useCameraPermissions } from 'expo-camera';
+import * as Haptics from 'expo-haptics';
+import { router } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, Animated, Image, Keyboard, KeyboardAvoidingView, Modal, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableWithoutFeedback, useColorScheme, View } from 'react-native';
 
 interface NutrientData {
   calories: number;
@@ -19,6 +19,7 @@ interface FoodData {
   imageUrl?: string;
   servingSize?: number; // in grams or ml depending on unit
   unit?: 'g' | 'ml'; // Whether nutrition is per 100g or 100ml
+  bestBefore?: string; // Expiration/best before date
 }
 
 export default function ScanScreen() {
@@ -36,6 +37,10 @@ export default function ScanScreen() {
   const [panY] = useState(new Animated.Value(0));
   const [unitType, setUnitType] = useState<'g' | 'ml' | 'dl'>('g'); // g=grams, ml=milliliters, dl=deciliters
   const [mealType, setMealType] = useState<'Breakfast' | 'Lunch' | 'Dinner' | 'Snack'>('Breakfast');
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const scanIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const [isWeb] = useState(Platform.OS === 'web');
 
   const panResponder = React.useRef(
     PanResponder.create({
@@ -66,7 +71,23 @@ export default function ScanScreen() {
       if (darkPref) setColorScheme(JSON.parse(darkPref));
     };
     loadDarkMode();
-  }, []);
+
+    // Initialize web camera if on web platform
+    if (isWeb) {
+      initWebCamera();
+    }
+
+    return () => {
+      // Cleanup web camera
+      if (isWeb && videoRef.current?.srcObject) {
+        const stream = videoRef.current.srcObject as MediaStream;
+        stream.getTracks().forEach(track => track.stop());
+      }
+      if (scanIntervalRef.current) {
+        clearInterval(scanIntervalRef.current);
+      }
+    };
+  }, [isWeb]);
 
   // Convert units for baking/powders
   const convertServingSize = (value: string, from: string, to: string): string => {
@@ -85,6 +106,69 @@ export default function ScanScreen() {
 
     const converted = num * conversions[from][to];
     return converted.toFixed(1);
+  };
+
+  const initWebCamera = async () => {
+    if (!isWeb) return;
+    
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: 'environment',
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+        }
+      });
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play();
+        
+        // Start scanning for barcodes
+        startBarcodeScanning();
+      }
+    } catch (error) {
+      console.error('Error accessing camera:', error);
+      Alert.alert('Camera Error', 'Could not access camera. Please check permissions.');
+    }
+  };
+
+  const startBarcodeScanning = () => {
+    if (!isWeb || !videoRef.current || !canvasRef.current) return;
+
+    scanIntervalRef.current = setInterval(async () => {
+      if (scanned || loading || !videoRef.current || !canvasRef.current) return;
+
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      
+      if (video.readyState === video.HAVE_ENOUGH_DATA) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const ctx = canvas.getContext('2d');
+        
+        if (ctx) {
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          
+          // Use native Barcode Detection API if available
+          if ('BarcodeDetector' in window) {
+            try {
+              const barcodeDetector = new (window as any).BarcodeDetector({
+                formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e']
+              });
+              const barcodes = await barcodeDetector.detect(imageData);
+              
+              if (barcodes.length > 0) {
+                handleBarCodeScanned({ data: barcodes[0].rawValue });
+              }
+            } catch (err) {
+              console.log('Barcode detection error:', err);
+            }
+          }
+        }
+      }
+    }, 300); // Scan every 300ms
   };
 
   if (!permission) {
@@ -108,15 +192,23 @@ export default function ScanScreen() {
     setScanned(true);
     setLoading(true);
 
+    // Stop web camera scanning
+    if (scanIntervalRef.current) {
+      clearInterval(scanIntervalRef.current);
+      scanIntervalRef.current = null;
+    }
+
     try {
+      // Haptics only work on native
+      if (!isWeb) {
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+
       // Fetch from OpenFoodFacts API
       const response = await fetch(`https://world.openfoodfacts.org/api/v2/product/${data}.json`);
       const json = await response.json();
 
       if (json.status === 1 && json.product) {
-        // Success haptic feedback
-        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        
         const product = json.product;
         const nutrients = product.nutriments || {};
         
@@ -145,6 +237,7 @@ export default function ScanScreen() {
           imageUrl: product.image_front_url || product.image_url,
           servingSize: product.serving_quantity || 100, // Use API serving size or default to 100
           unit: productUnit, // Track if nutrition is per 100g or 100ml
+          bestBefore: product.expiration_date || product.best_before_date, // Capture expiration info
         };
 
         setFoodData(food);
@@ -152,16 +245,28 @@ export default function ScanScreen() {
         setUnitType(productUnit); // Set initial unit based on product type
         setShowOptions(true);
       } else {
-        // Error haptic feedback
-        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        // Error feedback
+        if (!isWeb) {
+          await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        }
         Alert.alert('Product Not Found', 'Could not find nutrition data for this barcode.');
         setScanned(false);
+        // Restart scanning on web
+        if (isWeb) {
+          startBarcodeScanning();
+        }
       }
     } catch (error) {
-      // Error haptic feedback
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      // Error feedback
+      if (!isWeb) {
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      }
       Alert.alert('Error', 'Failed to fetch product data. Please try again.');
       setScanned(false);
+      // Restart scanning on web
+      if (isWeb) {
+        startBarcodeScanning();
+      }
     } finally {
       setLoading(false);
     }
@@ -190,14 +295,18 @@ export default function ScanScreen() {
       await AsyncStorage.setItem('food_entries', JSON.stringify(entries));
       
       // Success haptic and feedback
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      if (!isWeb) {
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
       
       setShowOptions(false);
       setFoodData(null);
       router.back();
     } catch (error) {
       // Error haptic
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      if (!isWeb) {
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      }
       Alert.alert('Error', 'Failed to save food entry.');
     }
   };
@@ -205,11 +314,15 @@ export default function ScanScreen() {
   const handleCustomAmount = () => {
     const amount = parseFloat(customAmount);
     if (isNaN(amount) || amount <= 0) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      if (!isWeb) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      }
       Alert.alert('Invalid Amount', `Please enter a valid weight in ${unitType}.`);
       return;
     }
-    Haptics.selectionAsync();
+    if (!isWeb) {
+      Haptics.selectionAsync();
+    }
     
     // Convert to grams for storage
     let amountInGrams = amount;
@@ -229,36 +342,76 @@ export default function ScanScreen() {
     setCustomAmount('100');
     setServingSize('100');
     setShowEnlargedImage(false);
+    // Restart scanning on web
+    if (isWeb) {
+      startBarcodeScanning();
+    }
   };
 
   return (
     <View style={styles.container}>
-      <CameraView
-        style={styles.camera}
-        facing="back"
-        barcodeScannerSettings={{
-          barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e'],
-        }}
-        onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
-      >
-        <View style={styles.overlay}>
-          <View style={styles.scanArea}>
-            {loading && <ActivityIndicator size="large" color="#fff" style={styles.scanAreaLoader} />}
+      {isWeb ? (
+        <View style={styles.webCameraContainer}>
+          <video
+            ref={videoRef}
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+            }}
+            playsInline
+            autoPlay
+            muted
+          />
+          <canvas ref={canvasRef} style={{ display: 'none' }} />
+          <View style={styles.overlay}>
+            <View style={styles.scanArea}>
+              {loading && <ActivityIndicator size="large" color="#fff" style={styles.scanAreaLoader} />}
+            </View>
+            <Text style={styles.instruction}>
+              {loading ? '✓ Scanning...' : '📷 Align barcode'}
+            </Text>
+            {loading && <Text style={styles.loadingText}>Looking up product data</Text>}
+            <Pressable
+              style={styles.cancelButton}
+              onPress={() => {
+                if (!isWeb) {
+                  Haptics.selectionAsync();
+                }
+                router.back();
+              }}>
+              <Text style={styles.cancelText}>✕ Cancel</Text>
+            </Pressable>
           </View>
-          <Text style={styles.instruction}>
-            {loading ? '✓ Scanning...' : '📷 Align barcode'}
-          </Text>
-          {loading && <Text style={styles.loadingText}>Looking up product data</Text>}
-          <Pressable
-            style={styles.cancelButton}
-            onPress={() => {
-              Haptics.selectionAsync();
-              router.back();
-            }}>
-            <Text style={styles.cancelText}>✕ Cancel</Text>
-          </Pressable>
         </View>
-      </CameraView>
+      ) : (
+        <CameraView
+          style={styles.camera}
+          facing="back"
+          barcodeScannerSettings={{
+            barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e'],
+          }}
+          onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
+        >
+          <View style={styles.overlay}>
+            <View style={styles.scanArea}>
+              {loading && <ActivityIndicator size="large" color="#fff" style={styles.scanAreaLoader} />}
+            </View>
+            <Text style={styles.instruction}>
+              {loading ? '✓ Scanning...' : '📷 Align barcode'}
+            </Text>
+            {loading && <Text style={styles.loadingText}>Looking up product data</Text>}
+            <Pressable
+              style={styles.cancelButton}
+              onPress={() => {
+                Haptics.selectionAsync();
+                router.back();
+              }}>
+              <Text style={styles.cancelText}>✕ Cancel</Text>
+            </Pressable>
+          </View>
+        </CameraView>
+      )}
 
       <Modal
         visible={showOptions}
@@ -296,6 +449,9 @@ export default function ScanScreen() {
               <View style={styles.headerContent}>
                 <Text style={styles.modalTitle}>✓ Product Found</Text>
                 <Text style={styles.productName}>{foodData?.name}</Text>
+                {foodData?.bestBefore && (
+                  <Text style={styles.bestBeforeText}>📅 Best Before: {foodData.bestBefore}</Text>
+                )}
               </View>
             </View>
             
@@ -310,6 +466,13 @@ export default function ScanScreen() {
                 />
                 <Text style={styles.tapToEnlarge}>Tap to enlarge</Text>
               </Pressable>
+            )}
+            
+            {foodData?.bestBefore && (
+              <View style={styles.bestBeforeBox}>
+                <Text style={styles.bestBeforeLabel}>📅 Best Before</Text>
+                <Text style={styles.bestBeforeText}>{foodData.bestBefore}</Text>
+              </View>
             )}
             
             <View style={styles.nutritionBox}>
@@ -454,6 +617,11 @@ const styles = StyleSheet.create({
     flex: 1,
     width: '100%',
   },
+  webCameraContainer: {
+    flex: 1,
+    width: '100%',
+    position: 'relative',
+  },
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.2)',
@@ -582,6 +750,12 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: Palette.brown,
   },
+  bestBeforeText: {
+    fontSize: 13,
+    color: '#d97706',
+    fontWeight: '500',
+    marginTop: 4,
+  },
   imageContainer: {
     width: 120,
     height: 120,
@@ -629,6 +803,25 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginTop: 16,
     opacity: 0.7,
+  },
+  bestBeforeBox: {
+    backgroundColor: '#fff9e6',
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#ffc107',
+  },
+  bestBeforeLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#ff9800',
+    marginBottom: 4,
+  },
+  bestBeforeText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#d97706',
   },
   nutritionBox: {
     backgroundColor: Palette.primary,
