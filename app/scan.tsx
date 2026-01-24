@@ -200,13 +200,19 @@ export default function ScanScreen() {
 
   if (!permission.granted) {
     return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <Text style={[styles.message, { marginBottom: 20, textAlign: 'center', paddingHorizontal: 20 }]}>
-          Camera permission is required to scan barcodes
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', padding: 20 }]}>
+        <Text style={[styles.message, { marginBottom: 20, textAlign: 'center', fontSize: 16, fontWeight: '600' }]}>
+          📷 Camera Permission Required
         </Text>
-        <Pressable style={styles.button} onPress={requestPermission}>
-          <Text style={styles.buttonText}>Grant Permission</Text>
+        <Text style={[styles.message, { marginBottom: 30, textAlign: 'center', fontSize: 14, opacity: 0.7 }]}>
+          HealthFull needs camera access to scan product barcodes and look up nutrition information.
+        </Text>
+        <Pressable style={[styles.button, { backgroundColor: '#FF3B30', paddingVertical: 14, width: '100%' }]} onPress={requestPermission}>
+          <Text style={[styles.buttonText, { fontSize: 16, fontWeight: 'bold' }]}>✓ Grant Camera Access</Text>
         </Pressable>
+        <Text style={[styles.message, { marginTop: 20, textAlign: 'center', fontSize: 12, opacity: 0.6 }]}>
+          You can change this later in Settings
+        </Text>
       </View>
     );
   }
@@ -214,11 +220,11 @@ export default function ScanScreen() {
   const handleBarCodeScanned = async (result: { type: string; data: string }) => {
     // Prevent multiple simultaneous scans
     if (loading) {
-      console.log('Already loading, ignoring scan');
+      console.log('🔄 Already loading, ignoring scan');
       return;
     }
     
-    console.log('Barcode scanned:', result.data);
+    console.log('📱 Barcode scanned:', result.data, 'Type:', result.type);
     
     setScanned(true);
     setLoading(true);
@@ -238,8 +244,11 @@ export default function ScanScreen() {
       const data = result.data;
 
       // Fetch from OpenFoodFacts API
+      console.log('🌐 Fetching OpenFoodFacts API for:', data);
       const response = await fetch(`https://world.openfoodfacts.org/api/v2/product/${data}.json`);
       const json = await response.json();
+
+      console.log('📦 API Response:', json.status, json.product?.product_name);
 
       if (json.status === 1 && json.product) {
         const product = json.product;
@@ -279,11 +288,13 @@ export default function ScanScreen() {
         setShowOptions(true);
       } else {
         // Error feedback
+        console.log('❌ Product not found (status:', json.status, ')');
         if (!isWeb) {
           await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
         }
         await feedback.alert('Product Not Found', 'Could not find nutrition data for this barcode.');
         setScanned(false);
+        setLoading(false);
         // Restart scanning on web
         if (isWeb) {
           startBarcodeScanning();
@@ -291,11 +302,13 @@ export default function ScanScreen() {
       }
     } catch (error) {
       // Error feedback
+      console.error('⚠️ Error fetching product:', error);
       if (!isWeb) {
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       }
       await feedback.alert('Error', 'Failed to fetch product data. Please try again.');
       setScanned(false);
+      setLoading(false);
       // Restart scanning on web
       if (isWeb) {
         startBarcodeScanning();
@@ -424,48 +437,49 @@ export default function ScanScreen() {
           </View>
         </View>
       ) : (
-        <CameraView
-          style={styles.camera}
-          facing="back"
-          barcodeScannerSettings={{
-            barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'code39'],
-          }}
-          onBarcodeScanned={handleBarCodeScanned}
-        >
-          <View style={styles.overlay}>
-            <View style={styles.scanArea}>
-              {loading && <ActivityIndicator size="large" color="#fff" style={styles.scanAreaLoader} />}
-            </View>
-            <Text style={styles.instruction}>
-              {loading ? '✓ Scanning...' : scanned ? '✓ Scanned!' : '📷 Align barcode with the center frame'}
+        <>
+          <CameraView
+            style={styles.camera}
+            facing="back"
+            barcodeScannerSettings={{
+              enabled: true,
+              barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e'],
+            }}
+            onBarcodeScanned={!scanned ? handleBarCodeScanned : undefined}
+          />
+          <View style={[styles.overlay, { backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end', paddingBottom: 20 }]}>
+            <Text style={[styles.instruction, { marginBottom: 20, textAlign: 'center', paddingHorizontal: 20 }]}>
+              {loading ? '✓ Scanning...' : scanned ? '✓ Scanned!' : '📷 Align barcode'}
             </Text>
-            {loading && <Text style={styles.loadingText}>Looking up product data...</Text>}
-            {scanned && !loading && <Text style={styles.loadingText}>Barcode detected - processing...</Text>}
             
-            {/* Test button - always visible for debugging */}
+            {/* Test Button - RED and PROMINENT */}
             <Pressable
               style={{
-                position: 'absolute',
-                bottom: 160,
-                left: 20,
-                right: 20,
-                backgroundColor: '#FF5722',
+                backgroundColor: '#FF3B30',
                 paddingVertical: 16,
                 paddingHorizontal: 20,
+                marginHorizontal: 20,
                 borderRadius: 12,
                 alignItems: 'center',
-                justifyContent: 'center',
+                marginBottom: 12,
+                elevation: 5,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.3,
+                shadowRadius: 4,
               }}
               onPress={() => {
-                console.log('Test button pressed - triggering test scan');
+                console.log('🧪 TEST BUTTON PRESSED');
                 handleBarCodeScanned({ type: 'ean13', data: '5449000000996' });
               }}>
-              <Text style={{ color: '#fff', fontSize: 18, fontWeight: 'bold' }}>🧪 Test Coca-Cola</Text>
-              <Text style={{ color: '#fff', fontSize: 12, marginTop: 4 }}>EAN: 5449000000996</Text>
+              <Text style={{ color: '#fff', fontSize: 18, fontWeight: 'bold' }}>🧪 TEST: Coca-Cola</Text>
+              <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 11, marginTop: 4 }}>5449000000996</Text>
             </Pressable>
+
+            {loading && <ActivityIndicator size="large" color="#fff" style={{ marginBottom: 20 }} />}
             
             <Pressable
-              style={styles.cancelButton}
+              style={[styles.cancelButton, { marginHorizontal: 20 }]}
               onPress={() => {
                 if (!isWeb) {
                   Haptics.selectionAsync();
@@ -475,7 +489,7 @@ export default function ScanScreen() {
               <Text style={styles.cancelText}>✕ Cancel</Text>
             </Pressable>
           </View>
-        </CameraView>
+        </>
       )}
 
       <Modal
