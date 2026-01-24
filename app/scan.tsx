@@ -417,10 +417,9 @@ export default function ScanScreen() {
           style={styles.camera}
           facing="back"
           barcodeScannerSettings={{
-            barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e'],
+            barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'code39'],
           }}
-          onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
-          enableTorch={false}
+          onBarcodeScanned={handleBarCodeScanned}
         >
           <View style={styles.overlay}>
             <View style={styles.scanArea}>
@@ -431,6 +430,19 @@ export default function ScanScreen() {
             </Text>
             {loading && <Text style={styles.loadingText}>Looking up product data</Text>}
             {scanned && !loading && <Text style={styles.loadingText}>Barcode detected</Text>}
+            
+            {/* Test button - remove after testing */}
+            {!loading && !scanned && (
+              <Pressable
+                style={[styles.cancelButton, { bottom: 120, backgroundColor: '#4CAF50' }]}
+                onPress={() => {
+                  console.log('Test button pressed');
+                  handleBarCodeScanned({ type: 'ean13', data: '5449000000996' });
+                }}>
+                <Text style={styles.cancelText}>🧪 Test Scan (Coca-Cola)</Text>
+              </Pressable>
+            )}
+            
             <Pressable
               style={styles.cancelButton}
               onPress={() => {
