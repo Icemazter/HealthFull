@@ -83,6 +83,7 @@ export default function GoalsScreen() {
       const glucoseData = await AsyncStorage.getItem('glucose_history');
       const insulinData = await AsyncStorage.getItem('insulin_history');
       const darkModeData = await AsyncStorage.getItem('dark_mode_preference');
+      const bodyStatsData = await AsyncStorage.getItem('body_stats');
       
       if (darkModeData) {
         setColorScheme(JSON.parse(darkModeData));
@@ -90,6 +91,10 @@ export default function GoalsScreen() {
       
       if (goalsData) {
         setGoals(JSON.parse(goalsData));
+      }
+
+      if (bodyStatsData) {
+        setStats(JSON.parse(bodyStatsData));
       }
       
       if (weightData) {
@@ -288,6 +293,7 @@ export default function GoalsScreen() {
   const saveGoals = async () => {
     try {
       await AsyncStorage.setItem('macro_goals', JSON.stringify(goals));
+      await AsyncStorage.setItem('body_stats', JSON.stringify(stats));
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert('Success', 'Goals saved successfully!');
     } catch (error) {
