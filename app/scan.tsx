@@ -41,6 +41,8 @@ export default function ScanScreen() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const scanIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const webScannerRef = useRef<any>(null);
+  const webScannerRunningRef = useRef(false);
   const [isWeb] = useState(Platform.OS === 'web');
 
   const panResponder = React.useRef(
@@ -102,6 +104,9 @@ export default function ScanScreen() {
           clearInterval(scanIntervalRef.current);
           scanIntervalRef.current = null;
         }
+        if (isWeb) {
+          stopWebScanner();
+        }
       };
     }, [isWeb])
   );
@@ -136,22 +141,8 @@ export default function ScanScreen() {
         await feedback.alert('Camera Access Denied', 'Please enable camera access in your browser settings to scan barcodes.');
         return;
       }
-
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: 'environment',
-          width: { ideal: 1920 },
-          height: { ideal: 1080 },
-        }
-      });
-
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.play();
-        
-        // Start scanning for barcodes
-        startBarcodeScanning();
-      }
+      // Start scanning for barcodes (web)
+      startBarcodeScanning();
     } catch (error) {
       console.error('Error accessing camera:', error);
       await feedback.alert('Camera Error', 'Could not access camera. Please check permissions in your browser settings.');
@@ -159,41 +150,64 @@ export default function ScanScreen() {
   };
 
   const startBarcodeScanning = () => {
-    if (!isWeb || !videoRef.current || !canvasRef.current) return;
+    if (!isWeb || webScannerRunningRef.current) return;
 
-    scanIntervalRef.current = setInterval(async () => {
-      if (scanned || loading || !videoRef.current || !canvasRef.current) return;
+    const startWebScanner = async () => {
+      try {
+        const module = await import('html5-qrcode');
+        const Html5Qrcode = module.Html5Qrcode;
+        const Html5QrcodeSupportedFormats = module.Html5QrcodeSupportedFormats;
 
-      const video = videoRef.current;
-      const canvas = canvasRef.current;
-      
-      if (video.readyState === video.HAVE_ENOUGH_DATA) {
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        const ctx = canvas.getContext('2d');
-        
-        if (ctx) {
-          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-          
-          // Use native Barcode Detection API if available
-          if ('BarcodeDetector' in window) {
-            try {
-              const barcodeDetector = new (window as any).BarcodeDetector({
-                formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e']
-              });
-              const barcodes = await barcodeDetector.detect(imageData);
-              
-              if (barcodes.length > 0) {
-                handleBarCodeScanned({ type: barcodes[0].format, data: barcodes[0].rawValue });
-              }
-            } catch (err) {
-              console.log('Barcode detection error:', err);
-            }
-          }
+        if (!Html5Qrcode) {
+          console.error('html5-qrcode not available');
+          return;
         }
+
+        const elementId = 'html5-qr-reader';
+        webScannerRef.current = new Html5Qrcode(elementId);
+        webScannerRunningRef.current = true;
+
+        await webScannerRef.current.start(
+          { facingMode: 'environment' },
+          {
+            fps: 10,
+            qrbox: { width: 250, height: 150 },
+            formatsToSupport: [
+              Html5QrcodeSupportedFormats.EAN_13,
+              Html5QrcodeSupportedFormats.EAN_8,
+              Html5QrcodeSupportedFormats.UPC_A,
+              Html5QrcodeSupportedFormats.UPC_E,
+              Html5QrcodeSupportedFormats.CODE_128,
+              Html5QrcodeSupportedFormats.CODE_39,
+            ],
+          },
+          (decodedText: string) => {
+            if (loading || scanned) return;
+            handleBarCodeScanned({ type: 'ean13', data: decodedText });
+          },
+          () => {}
+        );
+      } catch (err) {
+        console.error('Web barcode scanner error:', err);
+        webScannerRunningRef.current = false;
       }
-    }, 300); // Scan every 300ms
+    };
+
+    startWebScanner();
+  };
+
+  const stopWebScanner = async () => {
+    if (!isWeb || !webScannerRef.current) return;
+
+    try {
+      await webScannerRef.current.stop();
+      await webScannerRef.current.clear();
+    } catch (err) {
+      console.log('Web scanner stop error:', err);
+    } finally {
+      webScannerRef.current = null;
+      webScannerRunningRef.current = false;
+    }
   };
 
   if (!permission) {
@@ -230,6 +244,10 @@ export default function ScanScreen() {
     
     setScanned(true);
     setLoading(true);
+
+    if (isWeb) {
+      stopWebScanner();
+    }
 
     // Stop web camera scanning
     if (scanIntervalRef.current) {
@@ -406,18 +424,7 @@ export default function ScanScreen() {
     <View style={styles.container}>
       {isWeb ? (
         <View style={styles.webCameraContainer}>
-          <video
-            ref={videoRef}
-            style={{
-              width: '100%',
-              height: '100%',
-              objectFit: 'cover',
-            }}
-            playsInline
-            autoPlay
-            muted
-          />
-          <canvas ref={canvasRef} style={{ display: 'none' }} />
+          <View nativeID="html5-qr-reader" style={styles.webScannerContainer} />
           <View style={styles.webOverlay}>
             <View style={styles.scanArea}>
               {loading && <ActivityIndicator size="large" color="#fff" style={styles.scanAreaLoader} />}
@@ -728,6 +735,12 @@ const styles = StyleSheet.create({
     flex: 1,
     width: '100%',
     position: 'relative',
+  },
+  webScannerContainer: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#000',
   },
   webOverlay: {
     position: 'absolute',
