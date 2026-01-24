@@ -30,5 +30,6 @@ jobs:
           vercel-token: ${{ secrets.VERCEL_TOKEN }}
           vercel-org-id: team_7owVxWq8rpLNIqv78PolpJUi
           vercel-project-id: prj_XfDC4MwQEX7S1Gb1Km6ixbTOzPeg
-          vercel-args: '--prebuilt --prod'
+          vercel-args: '--prod'
           scope: icemazters-projects
+          working-directory: ./dist
