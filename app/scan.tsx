@@ -38,12 +38,14 @@ export default function ScanScreen() {
   const [panY] = useState(new Animated.Value(0));
   const [unitType, setUnitType] = useState<'g' | 'ml' | 'dl'>('g'); // g=grams, ml=milliliters, dl=deciliters
   const [mealType, setMealType] = useState<'Breakfast' | 'Lunch' | 'Dinner' | 'Snack'>('Breakfast');
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const scanIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const webScannerRef = useRef<any>(null);
   const webScannerRunningRef = useRef(false);
   const [webScannerActive, setWebScannerActive] = useState(false);
+  const [lastDecodedText, setLastDecodedText] = useState<string | null>(null);
+  const [lastDecodedAt, setLastDecodedAt] = useState<string | null>(null);
+  const [lastDecodeError, setLastDecodeError] = useState<string | null>(null);
+  const [lastDecodeErrorAt, setLastDecodeErrorAt] = useState<string | null>(null);
+  const lastWebErrorAtRef = useRef(0);
   const [isWeb] = useState(Platform.OS === 'web');
 
   const panResponder = React.useRef(
@@ -100,15 +102,8 @@ export default function ScanScreen() {
     }
 
     return () => {
-      // Cleanup web camera
-      if (isWeb && videoRef.current?.srcObject) {
-        const stream = videoRef.current.srcObject as MediaStream;
-        stream.getTracks().forEach(track => track.stop());
-      }
-      if (scanIntervalRef.current) {
-        clearInterval(scanIntervalRef.current);
-      }
       if (isWeb) {
+        stopWebScanner();
         const style = document.getElementById('web-barcode-css');
         if (style) {
           style.remove();
@@ -116,6 +111,12 @@ export default function ScanScreen() {
       }
     };
   }, [isWeb]);
+
+  useEffect(() => {
+    if (isWeb && permission?.granted) {
+      initWebCamera();
+    }
+  }, [isWeb, permission?.granted]);
 
   // Reset scanned state when screen comes into focus
   useFocusEffect(
@@ -125,16 +126,12 @@ export default function ScanScreen() {
       setCameraKey((prev) => prev + 1);
       
       // Restart web scanning if needed
-      if (isWeb && !scanIntervalRef.current) {
+      if (isWeb && !webScannerRunningRef.current) {
         startBarcodeScanning();
       }
       
       return () => {
         // Cleanup when losing focus
-        if (scanIntervalRef.current) {
-          clearInterval(scanIntervalRef.current);
-          scanIntervalRef.current = null;
-        }
         if (isWeb) {
           stopWebScanner();
         }
@@ -219,15 +216,27 @@ export default function ScanScreen() {
           },
           (decodedText: string) => {
             if (loading || scanned) return;
+            setLastDecodedText(decodedText);
+            setLastDecodedAt(new Date().toLocaleTimeString());
+            setLastDecodeError(null);
             handleBarCodeScanned({ type: 'ean13', data: decodedText });
           },
-          () => {}
+          (errorMessage: string) => {
+            const now = Date.now();
+            if (now - lastWebErrorAtRef.current > 1000) {
+              setLastDecodeError(errorMessage || 'No barcode detected');
+              setLastDecodeErrorAt(new Date().toLocaleTimeString());
+              lastWebErrorAtRef.current = now;
+            }
+          }
         );
         setWebScannerActive(true);
       } catch (err) {
         console.error('Web barcode scanner error:', err);
         webScannerRunningRef.current = false;
         setWebScannerActive(false);
+        setLastDecodeError('Scanner failed to start');
+        setLastDecodeErrorAt(new Date().toLocaleTimeString());
       }
     };
 
@@ -286,12 +295,6 @@ export default function ScanScreen() {
 
     if (isWeb) {
       stopWebScanner();
-    }
-
-    // Stop web camera scanning
-    if (scanIntervalRef.current) {
-      clearInterval(scanIntervalRef.current);
-      scanIntervalRef.current = null;
     }
 
     try {
@@ -472,6 +475,13 @@ export default function ScanScreen() {
               {loading ? '✓ Scanning...' : '📷 Align barcode'}
             </Text>
             {loading && <Text style={styles.loadingText}>Looking up product data</Text>}
+            <View style={styles.webDebugPanel}>
+              <Text style={styles.webDebugText}>Status: {webScannerActive ? 'Scanning' : 'Idle'}</Text>
+              <Text style={styles.webDebugText}>Last decode: {lastDecodedText ? lastDecodedText : '—'}</Text>
+              <Text style={styles.webDebugText}>Decoded at: {lastDecodedAt ? lastDecodedAt : '—'}</Text>
+              <Text style={styles.webDebugText}>Last error: {lastDecodeError ? lastDecodeError : '—'}</Text>
+              <Text style={styles.webDebugText}>Error at: {lastDecodeErrorAt ? lastDecodeErrorAt : '—'}</Text>
+            </View>
             {!webScannerActive && !loading && (
               <Pressable
                 style={{
@@ -839,6 +849,18 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginBottom: 20,
     textAlign: 'center',
+  },
+  webDebugPanel: {
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginBottom: 8,
+  },
+  webDebugText: {
+    color: '#fff',
+    fontSize: 11,
+    opacity: 0.9,
   },
   message: {
     color: '#fff',
