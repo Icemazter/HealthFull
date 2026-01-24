@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { StyleSheet, ScrollView, View, Text, Pressable, Alert, useColorScheme } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { router } from 'expo-router';
 import { Palette } from '@/constants/theme';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { router } from 'expo-router';
+import React, { useMemo, useState } from 'react';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, useColorScheme, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface FoodEntry {
   id: string;
@@ -39,6 +39,7 @@ export default function HomeScreen() {
   const [goals, setGoals] = useState({ calories: 2000, protein: 150, carbs: 200, fat: 65 });
   const [water, setWater] = useState(0);
   const [diabetesMode, setDiabetesMode] = useState(false);
+  const [focusedMacro, setFocusedMacro] = useState<'calories' | 'protein' | 'carbs' | 'fat'>('calories');
   const insets = useSafeAreaInsets();
 
   useFocusEffect(
@@ -259,38 +260,75 @@ export default function HomeScreen() {
       <ThemedView style={[styles.totalsCard, isDark && styles.totalsCardDark]}>
         <View style={styles.totalRow}>
           <View>
-            <Text style={styles.totalLabel}>Calories</Text>
-            <Text style={styles.totalValue}>{Math.round(totals.calories)} / {goals.calories}</Text>
+            <Text style={styles.totalLabel}>
+              {focusedMacro === 'calories' && 'Calories'}
+              {focusedMacro === 'protein' && 'Protein'}
+              {focusedMacro === 'carbs' && 'Carbs'}
+              {focusedMacro === 'fat' && 'Fat'}
+            </Text>
+            <Text style={styles.totalValue}>
+              {focusedMacro === 'calories' && `${Math.round(totals.calories)} / ${goals.calories}`}
+              {focusedMacro === 'protein' && `${Math.round(totals.protein)}g / ${goals.protein}g`}
+              {focusedMacro === 'carbs' && `${Math.round(totals.carbs)}g / ${goals.carbs}g`}
+              {focusedMacro === 'fat' && `${Math.round(totals.fat)}g / ${goals.fat}g`}
+            </Text>
           </View>
           <Text style={styles.percentageText}>
-            {Math.round((totals.calories / goals.calories) * 100)}%
+            {focusedMacro === 'calories' && `${Math.round((totals.calories / goals.calories) * 100)}%`}
+            {focusedMacro === 'protein' && `${Math.round((totals.protein / goals.protein) * 100)}%`}
+            {focusedMacro === 'carbs' && `${Math.round((totals.carbs / goals.carbs) * 100)}%`}
+            {focusedMacro === 'fat' && `${Math.round((totals.fat / goals.fat) * 100)}%`}
           </Text>
         </View>
         <View style={styles.progressBarContainer}>
           <View 
             style={[
               styles.progressBar,
-              { width: `${Math.min((totals.calories / goals.calories) * 100, 100)}%` }
+              focusedMacro === 'calories' && { width: `${Math.min((totals.calories / goals.calories) * 100, 100)}%` },
+              focusedMacro === 'protein' && { width: `${Math.min((totals.protein / goals.protein) * 100, 100)}%` },
+              focusedMacro === 'carbs' && { width: `${Math.min((totals.carbs / goals.carbs) * 100, 100)}%` },
+              focusedMacro === 'fat' && { width: `${Math.min((totals.fat / goals.fat) * 100, 100)}%` },
             ]} 
           />
         </View>
         
         <View style={styles.macrosRow}>
-          <View style={styles.macroItem}>
-            <Text style={styles.macroLabel}>Protein</Text>
-            <Text style={styles.macroValue}>{Math.round(totals.protein)}g</Text>
-            <Text style={styles.macroGoal}>/{goals.protein}g</Text>
-          </View>
-          <View style={styles.macroItem}>
-            <Text style={styles.macroLabel}>Carbs</Text>
-            <Text style={[styles.macroValue, diabetesMode && styles.macroValueHighlight]}>{Math.round(totals.carbs)}g</Text>
-            <Text style={styles.macroGoal}>/{goals.carbs}g</Text>
-          </View>
-          <View style={styles.macroItem}>
-            <Text style={styles.macroLabel}>Fat</Text>
-            <Text style={styles.macroValue}>{Math.round(totals.fat)}g</Text>
-            <Text style={styles.macroGoal}>/{goals.fat}g</Text>
-          </View>
+          {focusedMacro !== 'protein' && (
+            <Pressable 
+              style={styles.macroItem}
+              onPress={() => setFocusedMacro('protein')}>
+              <Text style={styles.macroLabel}>Protein</Text>
+              <Text style={styles.macroValue}>{Math.round(totals.protein)}g</Text>
+              <Text style={styles.macroGoal}>/{goals.protein}g</Text>
+            </Pressable>
+          )}
+          {focusedMacro !== 'carbs' && (
+            <Pressable 
+              style={styles.macroItem}
+              onPress={() => setFocusedMacro('carbs')}>
+              <Text style={styles.macroLabel}>Carbs</Text>
+              <Text style={[styles.macroValue, diabetesMode && styles.macroValueHighlight]}>{Math.round(totals.carbs)}g</Text>
+              <Text style={styles.macroGoal}>/{goals.carbs}g</Text>
+            </Pressable>
+          )}
+          {focusedMacro !== 'fat' && (
+            <Pressable 
+              style={styles.macroItem}
+              onPress={() => setFocusedMacro('fat')}>
+              <Text style={styles.macroLabel}>Fat</Text>
+              <Text style={styles.macroValue}>{Math.round(totals.fat)}g</Text>
+              <Text style={styles.macroGoal}>/{goals.fat}g</Text>
+            </Pressable>
+          )}
+          {focusedMacro !== 'calories' && (
+            <Pressable 
+              style={styles.macroItem}
+              onPress={() => setFocusedMacro('calories')}>
+              <Text style={styles.macroLabel}>Calories</Text>
+              <Text style={styles.macroValue}>{Math.round(totals.calories)}</Text>
+              <Text style={styles.macroGoal}>/{goals.calories}</Text>
+            </Pressable>
+          )}
         </View>
       </ThemedView>
 
