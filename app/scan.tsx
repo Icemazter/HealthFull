@@ -43,11 +43,6 @@ export default function ScanScreen() {
   const webScannerRunningRef = useRef(false);
   const webScannerControlsRef = useRef<any>(null);
   const [webScannerActive, setWebScannerActive] = useState(false);
-  const [lastDecodedText, setLastDecodedText] = useState<string | null>(null);
-  const [lastDecodedAt, setLastDecodedAt] = useState<string | null>(null);
-  const [lastDecodeError, setLastDecodeError] = useState<string | null>(null);
-  const [lastDecodeErrorAt, setLastDecodeErrorAt] = useState<string | null>(null);
-  const lastWebErrorAtRef = useRef(0);
   const [isWeb] = useState(Platform.OS === 'web');
 
   const panResponder = React.useRef(
@@ -159,7 +154,7 @@ export default function ScanScreen() {
     const startWebScanner = async () => {
       try {
         const module = await import('@zxing/library');
-        const { BrowserMultiFormatReader, BarcodeFormat, DecodeHintType, NotFoundException } = module as typeof import('@zxing/library');
+        const { BrowserMultiFormatReader, BarcodeFormat, DecodeHintType } = module as typeof import('@zxing/library');
 
         if (!videoRef.current) {
           console.error('Web video element not ready');
@@ -181,27 +176,23 @@ export default function ScanScreen() {
         webScannerRunningRef.current = true;
         setWebScannerActive(true);
 
-        const controls = await codeReader.decodeFromVideoDevice(
-          undefined,
+        const constraints = {
+          video: {
+            facingMode: 'environment',
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
+          },
+        };
+
+        const controls = await codeReader.decodeFromConstraints(
+          constraints,
           videoRef.current,
           (result, err) => {
             if (result) {
               const decodedText = result.getText();
               if (loading || scanned) return;
-              setLastDecodedText(decodedText);
-              setLastDecodedAt(new Date().toLocaleTimeString());
-              setLastDecodeError(null);
               handleBarCodeScanned({ type: 'ean13', data: decodedText });
               return;
-            }
-            if (err) {
-              const now = Date.now();
-              const isNotFound = err instanceof NotFoundException;
-              if (!isNotFound && now - lastWebErrorAtRef.current > 1000) {
-                setLastDecodeError((err as Error).message || String(err));
-                setLastDecodeErrorAt(new Date().toLocaleTimeString());
-                lastWebErrorAtRef.current = now;
-              }
             }
           }
         );
@@ -211,8 +202,6 @@ export default function ScanScreen() {
         console.error('Web barcode scanner error:', err);
         webScannerRunningRef.current = false;
         setWebScannerActive(false);
-        setLastDecodeError('Scanner failed to start');
-        setLastDecodeErrorAt(new Date().toLocaleTimeString());
       }
     };
 
@@ -392,7 +381,7 @@ export default function ScanScreen() {
       setLoading(false);
       setShowOptions(false);
       setFoodData(null);
-      router.back();
+      handleCancel();
     } catch (error) {
       // Error haptic
       if (!isWeb) {
@@ -466,51 +455,14 @@ export default function ScanScreen() {
               {loading ? '✓ Scanning...' : '📷 Align barcode'}
             </Text>
             {loading && <Text style={styles.loadingText}>Looking up product data</Text>}
-            <View style={styles.webDebugPanel}>
-              <Text style={styles.webDebugText}>Status: {webScannerActive ? 'Scanning' : 'Idle'}</Text>
-              <Text style={styles.webDebugText}>Last decode: {lastDecodedText ? lastDecodedText : '—'}</Text>
-              <Text style={styles.webDebugText}>Decoded at: {lastDecodedAt ? lastDecodedAt : '—'}</Text>
-              <Text style={styles.webDebugText}>Last error: {lastDecodeError ? lastDecodeError : '—'}</Text>
-              <Text style={styles.webDebugText}>Error at: {lastDecodeErrorAt ? lastDecodeErrorAt : '—'}</Text>
-            </View>
             {!webScannerActive && !loading && (
               <Pressable
-                style={{
-                  backgroundColor: '#1e88e5',
-                  paddingVertical: 12,
-                  paddingHorizontal: 18,
-                  marginTop: 8,
-                  marginBottom: 4,
-                  borderRadius: 10,
-                }}
+                style={[styles.footerButton, styles.footerPrimaryButton, { marginTop: 8, marginBottom: 4 }]}
                 onPress={() => startBarcodeScanning()}>
-                <Text style={{ color: '#fff', fontWeight: '600' }}>▶ Start Camera</Text>
+                <Text style={styles.footerButtonText}>▶ Start Camera</Text>
               </Pressable>
             )}
             
-            {/* Test Button - always visible on web */}
-            <Pressable
-              style={{
-                backgroundColor: '#FF3B30',
-                paddingVertical: 16,
-                paddingHorizontal: 20,
-                marginTop: 12,
-                marginHorizontal: 20,
-                borderRadius: 12,
-                alignItems: 'center',
-                elevation: 5,
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.3,
-                shadowRadius: 4,
-              }}
-              onPress={() => {
-                console.log('🧪 WEB TEST BUTTON PRESSED');
-                handleBarCodeScanned({ type: 'ean13', data: '5449000000996' });
-              }}>
-              <Text style={{ color: '#fff', fontSize: 16, fontWeight: 'bold' }}>🧪 TEST: Coca-Cola</Text>
-              <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 11, marginTop: 4 }}>5449000000996</Text>
-            </Pressable>
             <Pressable
               style={styles.cancelButton}
               onPress={() => {
@@ -540,30 +492,6 @@ export default function ScanScreen() {
               {loading ? '✓ Scanning...' : scanned ? '✓ Scanned!' : '📷 Align barcode'}
             </Text>
             
-            {/* Test Button - RED and PROMINENT */}
-            <Pressable
-              style={{
-                backgroundColor: '#FF3B30',
-                paddingVertical: 16,
-                paddingHorizontal: 20,
-                marginHorizontal: 20,
-                borderRadius: 12,
-                alignItems: 'center',
-                marginBottom: 12,
-                elevation: 5,
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.3,
-                shadowRadius: 4,
-              }}
-              onPress={() => {
-                console.log('🧪 TEST BUTTON PRESSED');
-                handleBarCodeScanned({ type: 'ean13', data: '5449000000996' });
-              }}>
-              <Text style={{ color: '#fff', fontSize: 18, fontWeight: 'bold' }}>🧪 TEST: Coca-Cola</Text>
-              <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 11, marginTop: 4 }}>5449000000996</Text>
-            </Pressable>
-
             {loading && <ActivityIndicator size="large" color="#fff" style={{ marginBottom: 20 }} />}
             
             <Pressable
@@ -824,28 +752,31 @@ const styles = StyleSheet.create({
   },
   instruction: {
     color: '#fff',
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '600',
     marginBottom: 8,
     textAlign: 'center',
   },
   loadingText: {
     color: 'rgba(255,255,255,0.8)',
-    fontSize: 14,
-    marginBottom: 20,
+    fontSize: 13,
+    marginBottom: 16,
     textAlign: 'center',
   },
-  webDebugPanel: {
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    borderRadius: 10,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    marginBottom: 8,
+  footerButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 18,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  webDebugText: {
+  footerPrimaryButton: {
+    backgroundColor: Palette.primary,
+  },
+  footerButtonText: {
     color: '#fff',
-    fontSize: 11,
-    opacity: 0.9,
+    fontSize: 16,
+    fontWeight: '600',
   },
   message: {
     color: '#fff',
@@ -867,11 +798,12 @@ const styles = StyleSheet.create({
   cancelButton: {
     position: 'absolute',
     bottom: 40,
-    backgroundColor: 'rgba(255,107,107,0.4)',
-    padding: 14,
-    borderRadius: 8,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    paddingVertical: 12,
+    paddingHorizontal: 18,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.5)',
+    borderColor: 'rgba(255,255,255,0.25)',
   },
   cancelText: {
     color: '#fff',

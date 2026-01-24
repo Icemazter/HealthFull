@@ -12,11 +12,15 @@ interface Goals {
   carbs: string;
   fat: string;
 }
-
+      <View style={[styles.card, isDark && styles.cardDark]}>
 interface WeightEntry {
-  date: string;
-  weight: string;
-  timestamp: number;
+          <Text style={[styles.cardTitle, isDark && styles.textDark]}>📏 Body Stats</Text>
+          <Pressable
+            style={[styles.toggleButton, isDark && styles.toggleButtonDark]}
+            onPress={() => setShowBodyStats(!showBodyStats)}>
+            <Text style={[styles.toggleButtonText, isDark && styles.toggleButtonTextDark]}>
+              {showBodyStats ? 'Hide' : 'Show'}
+            </Text>
 }
 
 interface GlucoseEntry {
@@ -24,89 +28,113 @@ interface GlucoseEntry {
   timestamp: number;
   context: 'Before Meal' | 'After Meal' | 'Fasting' | 'Random';
 }
-
+                <Text style={[styles.label, isDark && styles.labelDark]}>Height (cm)</Text>
 interface InsulinEntry {
-  units: string;
+                  style={[styles.input, isDark && styles.inputDark]}
   type: 'Rapid-Acting' | 'Long-Acting';
   timestamp: number;
   note?: string;
 }
+                  placeholderTextColor={isDark ? '#666' : '#999'}
 
 type Gender = 'Male' | 'Female';
 type ActivityLevel = 'Sedentary' | 'Light' | 'Moderate' | 'Very Active' | 'Extremely Active';
-type TrainingGoal = 'Lose Fat' | 'Maintain' | 'Gain Muscle';
+                <Text style={[styles.label, isDark && styles.labelDark]}>Weight (kg)</Text>
 
-interface BodyStats {
+                  style={[styles.input, isDark && styles.inputDark]}
   heightCm: string;
   weightKg: string;
   age: string;
   gender: Gender;
+                  placeholderTextColor={isDark ? '#666' : '#999'}
   activityLevel: ActivityLevel;
   goal: TrainingGoal;
 }
-
+                <Text style={[styles.label, isDark && styles.labelDark]}>Age</Text>
 export default function GoalsScreen() {
-  const insets = useSafeAreaInsets();
+                  style={[styles.input, isDark && styles.inputDark]}
   const systemColorScheme = useColorScheme();
   const [colorScheme, setColorScheme] = usePersistedState<'light' | 'dark' | null>(STORAGE_KEYS.DARK_MODE, null);
   const isDark = colorScheme === 'dark' || (colorScheme === null && systemColorScheme === 'dark');
   
+                  placeholderTextColor={isDark ? '#666' : '#999'}
   const [goals, setGoals] = usePersistedState<Goals>(STORAGE_KEYS.MACRO_GOALS, { calories: '2000', protein: '150', carbs: '200', fat: '65' });
   const [stats, setStats] = usePersistedState<BodyStats>(STORAGE_KEYS.BODY_STATS, {
     heightCm: '175',
     weightKg: '75',
     age: '25',
-    gender: 'Male',
+              <Text style={[styles.label, isDark && styles.labelDark]}>Gender</Text>
     activityLevel: 'Moderate',
     goal: 'Maintain',
   });
   
-  const [weight, setWeight] = useState('');
+                    style={[styles.chip, isDark && styles.chipDark, stats.gender === g && styles.chipActive]}
   const [showBodyStats, setShowBodyStats] = useState(false);
-  const [diabetesMode, setDiabetesMode] = usePersistedState(STORAGE_KEYS.DIABETES_MODE, false);
+                    <Text
+                      style={[
+                        styles.chipText,
+                        isDark && styles.chipTextDark,
+                        stats.gender === g && styles.chipTextActive,
+                      ]}>
+                      {g}
+                    </Text>
   const [showDiabetes, setShowDiabetes] = useState(false);
   
   const [glucoseValue, setGlucoseValue] = useState('');
   const [glucoseContext, setGlucoseContext] = useState<'Before Meal' | 'After Meal' | 'Fasting' | 'Random'>('Random');
   const glucoseManager = useHistoryManager<GlucoseEntry>(STORAGE_KEYS.GLUCOSE_HISTORY);
   
-  const [insulinUnits, setInsulinUnits] = useState('');
-  const [insulinType, setInsulinType] = useState<'Rapid-Acting' | 'Long-Acting'>('Rapid-Acting');
-  const [insulinNote, setInsulinNote] = useState('');
   const insulinManager = useHistoryManager<InsulinEntry>(STORAGE_KEYS.INSULIN_HISTORY);
-  
   const weightManager = useHistoryManager<WeightEntry>(STORAGE_KEYS.WEIGHT_HISTORY);
-
   useEffect(() => {
-    // Update weight in stats when history changes
     const latest = weightManager.history[0];
-    if (latest?.weight) {
+              <Text style={[styles.label, isDark && styles.labelDark]}>Activity Level</Text>
+              <Text style={[styles.activityHint, isDark && styles.activityHintDark]}>
+                <Text style={[styles.boldHint, isDark && styles.boldHintDark]}>Sedentary:</Text> Little/no exercise, desk job{'
       setStats((prev) => ({ ...prev, weightKg: latest.weight }));
+                <Text style={[styles.boldHint, isDark && styles.boldHintDark]}>Light:</Text> Exercise 1-3 days/week{'
     }
+                <Text style={[styles.boldHint, isDark && styles.boldHintDark]}>Moderate:</Text> Exercise 3-5 days/week{'
   }, [weightManager.history]);
+                <Text style={[styles.boldHint, isDark && styles.boldHintDark]}>Very Active:</Text> Exercise 6-7 days/week{'
 
+                <Text style={[styles.boldHint, isDark && styles.boldHintDark]}>Extremely Active:</Text> Physical job + daily training
   const toggleDiabetesMode = async () => {
     await setDiabetesMode(!diabetesMode);
     await feedback.selection();
   };
 
-  const logGlucose = async () => {
+                    style={[styles.chip, isDark && styles.chipDark, stats.activityLevel === a && styles.chipActive]}
     const { valid, parsed } = validate.number(glucoseValue);
-    if (!valid) {
+                    <Text
+                      style={[
+                        styles.chipText,
+                        isDark && styles.chipTextDark,
+                        stats.activityLevel === a && styles.chipTextActive,
+                      ]}>
+                      {a}
+                    </Text>
       return feedback.error('Please enter a valid glucose value.', 'Invalid Reading');
     }
 
     await glucoseManager.add({
       glucose: glucoseValue,
       timestamp: Date.now(),
-      context: glucoseContext,
+              <Text style={[styles.label, isDark && styles.labelDark]}>Training Goal</Text>
     });
     setGlucoseValue('');
     await feedback.success();
   };
-
+                    style={[styles.chip, isDark && styles.chipDark, stats.goal === g && styles.chipActive]}
   const logInsulin = async () => {
-    const { valid, parsed } = validate.number(insulinUnits);
+                    <Text
+                      style={[
+                        styles.chipText,
+                        isDark && styles.chipTextDark,
+                        stats.goal === g && styles.chipTextActive,
+                      ]}>
+                      {g}
+                    </Text>
     if (!valid) {
       return feedback.error('Please enter valid insulin units.', 'Invalid Dose');
     }
@@ -414,18 +442,19 @@ export default function GoalsScreen() {
       </View>
 
       {/* Body Weight Tracking */}
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>⚖️ Body Weight</Text>
+      <View style={[styles.card, isDark && styles.cardDark]}>
+        <Text style={[styles.cardTitle, isDark && styles.textDark]}>⚖️ Body Weight</Text>
         
         <View style={styles.weightInputRow}>
           <TextInput
-            style={styles.weightInput}
+            style={[styles.weightInput, isDark && styles.weightInputDark]}
             value={weight}
             onChangeText={setWeight}
             keyboardType="decimal-pad"
             placeholder="75.5"
+            placeholderTextColor={isDark ? '#666' : '#999'}
           />
-          <Text style={styles.weightUnit}>kg</Text>
+          <Text style={[styles.weightUnit, isDark && styles.weightUnitDark]}>kg</Text>
           <Pressable style={styles.logButton} onPress={logWeight}>
             <Text style={styles.logButtonText}>Log</Text>
           </Pressable>
@@ -454,11 +483,13 @@ export default function GoalsScreen() {
       </View>
 
       {/* Diabetes Management */}
-      <View style={styles.card}>
+      <View style={[styles.card, isDark && styles.cardDark]}>
         <View style={styles.bodyHeaderRow}>
-          <Text style={styles.cardTitle}>💉 Diabetes Management</Text>
-          <Pressable style={[styles.toggleButton, diabetesMode && styles.toggleButtonActive]} onPress={toggleDiabetesMode}>
-            <Text style={[styles.toggleButtonText, diabetesMode && styles.toggleButtonTextActive]}>
+          <Text style={[styles.cardTitle, isDark && styles.textDark]}>💉 Diabetes Management</Text>
+          <Pressable
+            style={[styles.toggleButton, isDark && styles.toggleButtonDark, diabetesMode && styles.toggleButtonActive]}
+            onPress={toggleDiabetesMode}>
+            <Text style={[styles.toggleButtonText, isDark && styles.toggleButtonTextDark, diabetesMode && styles.toggleButtonTextActive]}>
               {diabetesMode ? 'Enabled' : 'Disabled'}
             </Text>
           </Pressable>
@@ -467,7 +498,7 @@ export default function GoalsScreen() {
         {diabetesMode && (
           <View style={styles.diabetesContainer}>
             <Pressable style={styles.expandButton} onPress={() => setShowDiabetes(!showDiabetes)}>
-              <Text style={styles.expandButtonText}>
+              <Text style={[styles.expandButtonText, isDark && styles.textDark]}>
                 {showDiabetes ? '▼ Hide Tracking' : '▶ Show Tracking'}
               </Text>
             </Pressable>
@@ -792,6 +823,7 @@ const styles = StyleSheet.create({
   },
   inlineRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 12,
   },
   inlineHalf: {
@@ -799,6 +831,7 @@ const styles = StyleSheet.create({
   },
   inlineThird: {
     flex: 1,
+    minWidth: 100,
   },
   label: {
     fontSize: 14,
@@ -903,6 +936,7 @@ const styles = StyleSheet.create({
   weightInputRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
     gap: 12,
     marginTop: 4,
     marginBottom: 20,
@@ -925,6 +959,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: Palette.darkGray,
+    marginTop: 2,
   },
   weightUnitDark: {
     color: '#d1d5db',
@@ -934,6 +969,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 8,
+    marginTop: 2,
   },
   logButtonText: {
     color: Palette.white,
