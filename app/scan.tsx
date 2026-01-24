@@ -43,6 +43,7 @@ export default function ScanScreen() {
   const scanIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const webScannerRef = useRef<any>(null);
   const webScannerRunningRef = useRef(false);
+  const [webScannerActive, setWebScannerActive] = useState(false);
   const [isWeb] = useState(Platform.OS === 'web');
 
   const panResponder = React.useRef(
@@ -72,6 +73,30 @@ export default function ScanScreen() {
     // Initialize web camera if on web platform
     if (isWeb) {
       initWebCamera();
+      // Inject CSS to hide html5-qrcode overlays
+      const style = document.createElement('style');
+      style.id = 'web-barcode-css';
+      style.textContent = `
+        #html5-qr-reader__dashboard,
+        #html5-qr-reader__dashboard_section {
+          display: none !important;
+        }
+        #qr-shaded-region {
+          display: none !important;
+        }
+        #html5-qr-reader__scan_region {
+          position: absolute !important;
+          inset: 0 !important;
+          width: 100% !important;
+          height: 100% !important;
+        }
+        #html5-qr-reader__scan_region video {
+          width: 100% !important;
+          height: 100% !important;
+          object-fit: cover !important;
+        }
+      `;
+      document.head.appendChild(style);
     }
 
     return () => {
@@ -82,6 +107,12 @@ export default function ScanScreen() {
       }
       if (scanIntervalRef.current) {
         clearInterval(scanIntervalRef.current);
+      }
+      if (isWeb) {
+        const style = document.getElementById('web-barcode-css');
+        if (style) {
+          style.remove();
+        }
       }
     };
   }, [isWeb]);
@@ -135,9 +166,11 @@ export default function ScanScreen() {
     
     try {
       // Check if permission is already granted
-      const permissionStatus = await navigator.permissions.query({ name: 'camera' as PermissionName });
+      const permissionStatus = navigator.permissions?.query
+        ? await navigator.permissions.query({ name: 'camera' as PermissionName })
+        : null;
       
-      if (permissionStatus.state === 'denied') {
+      if (permissionStatus?.state === 'denied') {
         await feedback.alert('Camera Access Denied', 'Please enable camera access in your browser settings to scan barcodes.');
         return;
       }
@@ -180,6 +213,9 @@ export default function ScanScreen() {
               Html5QrcodeSupportedFormats.CODE_128,
               Html5QrcodeSupportedFormats.CODE_39,
             ],
+            experimentalFeatures: {
+              useBarCodeDetectorIfSupported: true,
+            },
           },
           (decodedText: string) => {
             if (loading || scanned) return;
@@ -187,9 +223,11 @@ export default function ScanScreen() {
           },
           () => {}
         );
+        setWebScannerActive(true);
       } catch (err) {
         console.error('Web barcode scanner error:', err);
         webScannerRunningRef.current = false;
+        setWebScannerActive(false);
       }
     };
 
@@ -207,6 +245,7 @@ export default function ScanScreen() {
     } finally {
       webScannerRef.current = null;
       webScannerRunningRef.current = false;
+      setWebScannerActive(false);
     }
   };
 
@@ -433,7 +472,20 @@ export default function ScanScreen() {
               {loading ? '✓ Scanning...' : '📷 Align barcode'}
             </Text>
             {loading && <Text style={styles.loadingText}>Looking up product data</Text>}
-            <Text style={[styles.loadingText, { opacity: 0.7 }]}>Web build only supports QR scanning natively</Text>
+            {!webScannerActive && !loading && (
+              <Pressable
+                style={{
+                  backgroundColor: '#1e88e5',
+                  paddingVertical: 12,
+                  paddingHorizontal: 18,
+                  marginTop: 8,
+                  marginBottom: 4,
+                  borderRadius: 10,
+                }}
+                onPress={() => startBarcodeScanning()}>
+                <Text style={{ color: '#fff', fontWeight: '600' }}>▶ Start Camera</Text>
+              </Pressable>
+            )}
             
             {/* Test Button - always visible on web */}
             <Pressable
