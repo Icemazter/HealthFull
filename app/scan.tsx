@@ -212,7 +212,11 @@ export default function ScanScreen() {
   }
 
   const handleBarCodeScanned = async (result: { type: string; data: string }) => {
-    if (scanned || loading) return;
+    // Prevent multiple simultaneous scans
+    if (loading) {
+      console.log('Already loading, ignoring scan');
+      return;
+    }
     
     console.log('Barcode scanned:', result.data);
     
@@ -327,6 +331,9 @@ export default function ScanScreen() {
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
       
+      // Reset state
+      setScanned(false);
+      setLoading(false);
       setShowOptions(false);
       setFoodData(null);
       router.back();
@@ -336,6 +343,9 @@ export default function ScanScreen() {
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       }
       await feedback.alert('Error', 'Failed to save food entry.');
+      // Reset state on error too
+      setScanned(false);
+      setLoading(false);
     }
   };
 
@@ -364,9 +374,10 @@ export default function ScanScreen() {
   };
 
   const handleCancel = () => {
+    setScanned(false);
+    setLoading(false);
     setShowOptions(false);
     setFoodData(null);
-    setScanned(false);
     setCustomAmount('100');
     setServingSize('100');
     setShowEnlargedImage(false);
@@ -428,31 +439,30 @@ export default function ScanScreen() {
             <Text style={styles.instruction}>
               {loading ? '✓ Scanning...' : scanned ? '✓ Scanned!' : '📷 Align barcode with the center frame'}
             </Text>
-            {loading && <Text style={styles.loadingText}>Looking up product data</Text>}
-            {scanned && !loading && <Text style={styles.loadingText}>Barcode detected</Text>}
+            {loading && <Text style={styles.loadingText}>Looking up product data...</Text>}
+            {scanned && !loading && <Text style={styles.loadingText}>Barcode detected - processing...</Text>}
             
-            {/* Test button - remove after testing */}
-            {!loading && !scanned && (
-              <Pressable
-                style={{
-                  position: 'absolute',
-                  bottom: 140,
-                  left: 20,
-                  right: 20,
-                  backgroundColor: '#4CAF50',
-                  paddingVertical: 12,
-                  paddingHorizontal: 20,
-                  borderRadius: 8,
-                  alignItems: 'center',
-                  zIndex: 100,
-                }}
-                onPress={() => {
-                  console.log('Test button pressed - triggering test scan');
-                  handleBarCodeScanned({ type: 'ean13', data: '5449000000996' });
-                }}>
-                <Text style={{ color: '#fff', fontSize: 16, fontWeight: 'bold' }}>🧪 Test Scan (Coca-Cola)</Text>
-              </Pressable>
-            )}
+            {/* Test button - always visible for debugging */}
+            <Pressable
+              style={{
+                position: 'absolute',
+                bottom: 160,
+                left: 20,
+                right: 20,
+                backgroundColor: '#FF5722',
+                paddingVertical: 16,
+                paddingHorizontal: 20,
+                borderRadius: 12,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+              onPress={() => {
+                console.log('Test button pressed - triggering test scan');
+                handleBarCodeScanned({ type: 'ean13', data: '5449000000996' });
+              }}>
+              <Text style={{ color: '#fff', fontSize: 18, fontWeight: 'bold' }}>🧪 Test Coca-Cola</Text>
+              <Text style={{ color: '#fff', fontSize: 12, marginTop: 4 }}>EAN: 5449000000996</Text>
+            </Pressable>
             
             <Pressable
               style={styles.cancelButton}
