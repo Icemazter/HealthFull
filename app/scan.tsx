@@ -38,8 +38,10 @@ export default function ScanScreen() {
   const [panY] = useState(new Animated.Value(0));
   const [unitType, setUnitType] = useState<'g' | 'ml' | 'dl'>('g'); // g=grams, ml=milliliters, dl=deciliters
   const [mealType, setMealType] = useState<'Breakfast' | 'Lunch' | 'Dinner' | 'Snack'>('Breakfast');
+  const videoRef = useRef<HTMLVideoElement | null>(null);
   const webScannerRef = useRef<any>(null);
   const webScannerRunningRef = useRef(false);
+  const webScannerControlsRef = useRef<any>(null);
   const [webScannerActive, setWebScannerActive] = useState(false);
   const [lastDecodedText, setLastDecodedText] = useState<string | null>(null);
   const [lastDecodedAt, setLastDecodedAt] = useState<string | null>(null);
@@ -75,39 +77,11 @@ export default function ScanScreen() {
     // Initialize web camera if on web platform
     if (isWeb) {
       initWebCamera();
-      // Inject CSS to hide html5-qrcode overlays
-      const style = document.createElement('style');
-      style.id = 'web-barcode-css';
-      style.textContent = `
-        #html5-qr-reader__dashboard,
-        #html5-qr-reader__dashboard_section {
-          display: none !important;
-        }
-        #qr-shaded-region {
-          display: none !important;
-        }
-        #html5-qr-reader__scan_region {
-          position: absolute !important;
-          inset: 0 !important;
-          width: 100% !important;
-          height: 100% !important;
-        }
-        #html5-qr-reader__scan_region video {
-          width: 100% !important;
-          height: 100% !important;
-          object-fit: cover !important;
-        }
-      `;
-      document.head.appendChild(style);
     }
 
     return () => {
       if (isWeb) {
         stopWebScanner();
-        const style = document.getElementById('web-barcode-css');
-        if (style) {
-          style.remove();
-        }
       }
     };
   }, [isWeb]);
@@ -184,53 +158,55 @@ export default function ScanScreen() {
 
     const startWebScanner = async () => {
       try {
-        const module = await import('html5-qrcode');
-        const Html5Qrcode = module.Html5Qrcode;
-        const Html5QrcodeSupportedFormats = module.Html5QrcodeSupportedFormats;
+        const module = await import('@zxing/library');
+        const { BrowserMultiFormatReader, BarcodeFormat, DecodeHintType, NotFoundException } = module as typeof import('@zxing/library');
 
-        if (!Html5Qrcode) {
-          console.error('html5-qrcode not available');
+        if (!videoRef.current) {
+          console.error('Web video element not ready');
           return;
         }
 
-        const elementId = 'html5-qr-reader';
-        webScannerRef.current = new Html5Qrcode(elementId);
-        webScannerRunningRef.current = true;
+        const hints = new Map();
+        hints.set(DecodeHintType.POSSIBLE_FORMATS, [
+          BarcodeFormat.EAN_13,
+          BarcodeFormat.EAN_8,
+          BarcodeFormat.UPC_A,
+          BarcodeFormat.UPC_E,
+          BarcodeFormat.CODE_128,
+          BarcodeFormat.CODE_39,
+        ]);
 
-        await webScannerRef.current.start(
-          { facingMode: 'environment' },
-          {
-            fps: 10,
-            qrbox: { width: 250, height: 150 },
-            formatsToSupport: [
-              Html5QrcodeSupportedFormats.EAN_13,
-              Html5QrcodeSupportedFormats.EAN_8,
-              Html5QrcodeSupportedFormats.UPC_A,
-              Html5QrcodeSupportedFormats.UPC_E,
-              Html5QrcodeSupportedFormats.CODE_128,
-              Html5QrcodeSupportedFormats.CODE_39,
-            ],
-            experimentalFeatures: {
-              useBarCodeDetectorIfSupported: true,
-            },
-          },
-          (decodedText: string) => {
-            if (loading || scanned) return;
-            setLastDecodedText(decodedText);
-            setLastDecodedAt(new Date().toLocaleTimeString());
-            setLastDecodeError(null);
-            handleBarCodeScanned({ type: 'ean13', data: decodedText });
-          },
-          (errorMessage: string) => {
-            const now = Date.now();
-            if (now - lastWebErrorAtRef.current > 1000) {
-              setLastDecodeError(errorMessage || 'No barcode detected');
-              setLastDecodeErrorAt(new Date().toLocaleTimeString());
-              lastWebErrorAtRef.current = now;
+        const codeReader = new BrowserMultiFormatReader(hints, 500);
+        webScannerRef.current = codeReader;
+        webScannerRunningRef.current = true;
+        setWebScannerActive(true);
+
+        const controls = await codeReader.decodeFromVideoDevice(
+          undefined,
+          videoRef.current,
+          (result, err) => {
+            if (result) {
+              const decodedText = result.getText();
+              if (loading || scanned) return;
+              setLastDecodedText(decodedText);
+              setLastDecodedAt(new Date().toLocaleTimeString());
+              setLastDecodeError(null);
+              handleBarCodeScanned({ type: 'ean13', data: decodedText });
+              return;
+            }
+            if (err) {
+              const now = Date.now();
+              const isNotFound = err instanceof NotFoundException;
+              if (!isNotFound && now - lastWebErrorAtRef.current > 1000) {
+                setLastDecodeError((err as Error).message || String(err));
+                setLastDecodeErrorAt(new Date().toLocaleTimeString());
+                lastWebErrorAtRef.current = now;
+              }
             }
           }
         );
-        setWebScannerActive(true);
+
+        webScannerControlsRef.current = controls;
       } catch (err) {
         console.error('Web barcode scanner error:', err);
         webScannerRunningRef.current = false;
@@ -247,12 +223,17 @@ export default function ScanScreen() {
     if (!isWeb || !webScannerRef.current) return;
 
     try {
-      await webScannerRef.current.stop();
-      await webScannerRef.current.clear();
+      if (webScannerControlsRef.current?.stop) {
+        await webScannerControlsRef.current.stop();
+      }
+      if (webScannerRef.current?.reset) {
+        webScannerRef.current.reset();
+      }
     } catch (err) {
       console.log('Web scanner stop error:', err);
     } finally {
       webScannerRef.current = null;
+      webScannerControlsRef.current = null;
       webScannerRunningRef.current = false;
       setWebScannerActive(false);
     }
@@ -466,7 +447,17 @@ export default function ScanScreen() {
     <View style={styles.container}>
       {isWeb ? (
         <View style={styles.webCameraContainer}>
-          <View nativeID="html5-qr-reader" style={styles.webScannerContainer} />
+          <video
+            ref={videoRef}
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+            }}
+            playsInline
+            autoPlay
+            muted
+          />
           <View style={styles.webOverlay}>
             <View style={styles.scanArea}>
               {loading && <ActivityIndicator size="large" color="#fff" style={styles.scanAreaLoader} />}
@@ -797,12 +788,6 @@ const styles = StyleSheet.create({
     flex: 1,
     width: '100%',
     position: 'relative',
-  },
-  webScannerContainer: {
-    flex: 1,
-    width: '100%',
-    height: '100%',
-    backgroundColor: '#000',
   },
   webOverlay: {
     position: 'absolute',
