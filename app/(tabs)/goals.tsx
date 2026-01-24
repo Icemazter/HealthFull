@@ -1,8 +1,9 @@
 import { Palette } from '@/constants/theme';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as Haptics from 'expo-haptics';
+import { useHistoryManager, usePersistedState } from '@/hooks/use-persisted-state';
+import { feedback, validate } from '@/utils/feedback';
+import { STORAGE_KEYS } from '@/utils/storage';
 import React, { useEffect, useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useColorScheme, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useColorScheme, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface Goals {
@@ -47,13 +48,11 @@ interface BodyStats {
 export default function GoalsScreen() {
   const insets = useSafeAreaInsets();
   const systemColorScheme = useColorScheme();
-  const [colorScheme, setColorScheme] = useState<'light' | 'dark' | null>(null);
+  const [colorScheme, setColorScheme] = usePersistedState<'light' | 'dark' | null>(STORAGE_KEYS.DARK_MODE, null);
   const isDark = colorScheme === 'dark' || (colorScheme === null && systemColorScheme === 'dark');
-  const [goals, setGoals] = useState<Goals>({ calories: '2000', protein: '150', carbs: '200', fat: '65' });
-  const [weight, setWeight] = useState('');
-  const [weightHistory, setWeightHistory] = useState<WeightEntry[]>([]);
-  const [showBodyStats, setShowBodyStats] = useState(false);
-  const [stats, setStats] = useState<BodyStats>({
+  
+  const [goals, setGoals] = usePersistedState<Goals>(STORAGE_KEYS.MACRO_GOALS, { calories: '2000', protein: '150', carbs: '200', fat: '65' });
+  const [stats, setStats] = usePersistedState<BodyStats>(STORAGE_KEYS.BODY_STATS, {
     heightCm: '175',
     weightKg: '75',
     age: '25',
@@ -61,137 +60,66 @@ export default function GoalsScreen() {
     activityLevel: 'Moderate',
     goal: 'Maintain',
   });
-  const [diabetesMode, setDiabetesMode] = useState(false);
+  
+  const [weight, setWeight] = useState('');
+  const [showBodyStats, setShowBodyStats] = useState(false);
+  const [diabetesMode, setDiabetesMode] = usePersistedState(STORAGE_KEYS.DIABETES_MODE, false);
   const [showDiabetes, setShowDiabetes] = useState(false);
+  
   const [glucoseValue, setGlucoseValue] = useState('');
   const [glucoseContext, setGlucoseContext] = useState<'Before Meal' | 'After Meal' | 'Fasting' | 'Random'>('Random');
-  const [glucoseHistory, setGlucoseHistory] = useState<GlucoseEntry[]>([]);
+  const glucoseManager = useHistoryManager<GlucoseEntry>(STORAGE_KEYS.GLUCOSE_HISTORY);
+  
   const [insulinUnits, setInsulinUnits] = useState('');
   const [insulinType, setInsulinType] = useState<'Rapid-Acting' | 'Long-Acting'>('Rapid-Acting');
   const [insulinNote, setInsulinNote] = useState('');
-  const [insulinHistory, setInsulinHistory] = useState<InsulinEntry[]>([]);
+  const insulinManager = useHistoryManager<InsulinEntry>(STORAGE_KEYS.INSULIN_HISTORY);
+  
+  const weightManager = useHistoryManager<WeightEntry>(STORAGE_KEYS.WEIGHT_HISTORY);
 
   useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadData = async () => {
-    try {
-      const goalsData = await AsyncStorage.getItem('macro_goals');
-      const weightData = await AsyncStorage.getItem('weight_history');
-      const diabetesEnabled = await AsyncStorage.getItem('diabetes_mode');
-      const glucoseData = await AsyncStorage.getItem('glucose_history');
-      const insulinData = await AsyncStorage.getItem('insulin_history');
-      const darkModeData = await AsyncStorage.getItem('dark_mode_preference');
-      const bodyStatsData = await AsyncStorage.getItem('body_stats');
-      
-      if (darkModeData) {
-        setColorScheme(JSON.parse(darkModeData));
-      }
-      
-      if (goalsData) {
-        setGoals(JSON.parse(goalsData));
-      }
-
-      if (bodyStatsData) {
-        setStats(JSON.parse(bodyStatsData));
-      }
-      
-      if (weightData) {
-        setWeightHistory(JSON.parse(weightData));
-        const latest = JSON.parse(weightData)[0];
-        if (latest?.weight) {
-          setStats((prev) => ({ ...prev, weightKg: latest.weight }));
-        }
-      }
-
-      if (diabetesEnabled) {
-        setDiabetesMode(JSON.parse(diabetesEnabled));
-      }
-
-      if (glucoseData) {
-        setGlucoseHistory(JSON.parse(glucoseData));
-      }
-
-      if (insulinData) {
-        setInsulinHistory(JSON.parse(insulinData));
-      }
-    } catch (error) {
-      console.error('Failed to load goals data:', error);
+    // Update weight in stats when history changes
+    const latest = weightManager.history[0];
+    if (latest?.weight) {
+      setStats((prev) => ({ ...prev, weightKg: latest.weight }));
     }
-  };
+  }, [weightManager.history]);
 
   const toggleDiabetesMode = async () => {
-    const newMode = !diabetesMode;
-    setDiabetesMode(newMode);
-    await AsyncStorage.setItem('diabetes_mode', JSON.stringify(newMode));
-    Haptics.selectionAsync();
+    await setDiabetesMode(!diabetesMode);
+    await feedback.selection();
   };
 
   const logGlucose = async () => {
-    const glucose = parseFloat(glucoseValue);
-    if (isNaN(glucose) || glucose <= 0) {
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert('Invalid Reading', 'Please enter a valid glucose value.');
-      return;
+    const { valid, parsed } = validate.number(glucoseValue);
+    if (!valid) {
+      return feedback.error('Please enter a valid glucose value.', 'Invalid Reading');
     }
 
-    try {
-      const newEntry: GlucoseEntry = {
-        glucose: glucoseValue,
-        timestamp: Date.now(),
-        context: glucoseContext,
-      };
-      
-      const updated = [newEntry, ...glucoseHistory];
-      await AsyncStorage.setItem('glucose_history', JSON.stringify(updated));
-      setGlucoseHistory(updated);
-      setGlucoseValue('');
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch (error) {
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert('Error', 'Failed to log glucose.');
-    }
+    await glucoseManager.add({
+      glucose: glucoseValue,
+      timestamp: Date.now(),
+      context: glucoseContext,
+    });
+    setGlucoseValue('');
+    await feedback.success();
   };
 
   const logInsulin = async () => {
-    const units = parseFloat(insulinUnits);
-    if (isNaN(units) || units <= 0) {
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert('Invalid Dose', 'Please enter valid insulin units.');
-      return;
+    const { valid, parsed } = validate.number(insulinUnits);
+    if (!valid) {
+      return feedback.error('Please enter valid insulin units.', 'Invalid Dose');
     }
 
-    try {
-      const newEntry: InsulinEntry = {
-        units: insulinUnits,
-        type: insulinType,
-        timestamp: Date.now(),
-        note: insulinNote || undefined,
-      };
-      
-      const updated = [newEntry, ...insulinHistory];
-      await AsyncStorage.setItem('insulin_history', JSON.stringify(updated));
-      setInsulinHistory(updated);
-      setInsulinUnits('');
-      setInsulinNote('');
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch (error) {
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert('Error', 'Failed to log insulin.');
-    }
-  };
-
-  const deleteGlucoseEntry = async (timestamp: number) => {
-    const filtered = glucoseHistory.filter(e => e.timestamp !== timestamp);
-    await AsyncStorage.setItem('glucose_history', JSON.stringify(filtered));
-    setGlucoseHistory(filtered);
-  };
-
-  const deleteInsulinEntry = async (timestamp: number) => {
-    const filtered = insulinHistory.filter(e => e.timestamp !== timestamp);
-    await AsyncStorage.setItem('insulin_history', JSON.stringify(filtered));
-    setInsulinHistory(filtered);
+    await insulinManager.add({
+      units: insulinUnits,
+      type: insulinType,
+      timestamp: Date.now(),
+      note: insulinNote || undefined,
+    });
+    setInsulinUnits('');
+    setInsulinNote('');
+    await feedback.success();
   };
 
   const recommendGoals = async () => {
@@ -200,8 +128,7 @@ export default function GoalsScreen() {
     const age = parseFloat(stats.age) || 0;
     
     if (height <= 0 || weightKg <= 0 || age <= 0) {
-      Alert.alert('Missing data', 'Enter height, weight, and age to get a suggestion.');
-      return;
+      return feedback.error('Enter height, weight, and age to get a suggestion.', 'Missing data');
     }
 
     // Mifflin-St Jeor equation for BMR (most accurate)
@@ -263,84 +190,60 @@ export default function GoalsScreen() {
       fat: fat.toString(),
     };
     
-    setGoals(newGoals);
+    await setGoals(newGoals);
     
-    // Auto-save the recommended goals
-    try {
-      await AsyncStorage.setItem('macro_goals', JSON.stringify(newGoals));
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      
-      // Show detailed calculation in popup
-      const message = 
-        `📊 Calculations:\n` +
-        `BMR: ${Math.round(bmr)} kcal\n` +
-        `TDEE: ${Math.round(tdee)} kcal\n` +
-        `Goal: ${stats.goal}\n\n` +
-        `✅ Applied Goals:\n` +
-        `🔥 Calories: ${Math.round(calories)} kcal\n` +
-        `🥩 Protein: ${protein}g (${proteinPerKg}g/kg)\n` +
-        `🍞 Carbs: ${carbs}g\n` +
-        `🥑 Fat: ${fat}g (0.9g/kg)\n\n` +
-        `Goals automatically saved to nutrition tracker!`;
-      
-      Alert.alert('🎯 Goals Applied & Saved', message);
-    } catch (error) {
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-      Alert.alert('Goals Applied', 'Goals set but auto-save failed. Please save manually.');
-    }
+    const message = 
+      `📊 Calculations:\n` +
+      `BMR: ${Math.round(bmr)} kcal\n` +
+      `TDEE: ${Math.round(tdee)} kcal\n` +
+      `Goal: ${stats.goal}\n\n` +
+      `✅ Applied Goals:\n` +
+      `🔥 Calories: ${Math.round(calories)} kcal\n` +
+      `🥩 Protein: ${protein}g (${proteinPerKg}g/kg)\n` +
+      `🍞 Carbs: ${carbs}g\n` +
+      `🥑 Fat: ${fat}g (0.9g/kg)\n\n` +
+      `Goals automatically saved to nutrition tracker!`;
+    
+    await feedback.success(message, '🎯 Goals Applied & Saved');
   };
 
   const saveGoals = async () => {
-    try {
-      await AsyncStorage.setItem('macro_goals', JSON.stringify(goals));
-      await AsyncStorage.setItem('body_stats', JSON.stringify(stats));
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert('Success', 'Goals saved successfully!');
-    } catch (error) {
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert('Error', 'Failed to save goals.');
-    }
+    await setGoals(goals);
+    await setStats(stats);
+    await feedback.success('Goals saved successfully!');
   };
 
   const logWeight = async () => {
-    const weightNum = parseFloat(weight);
-    if (isNaN(weightNum) || weightNum <= 0) {
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert('Invalid Weight', 'Please enter a valid weight.');
-      return;
+    const { valid } = validate.number(weight);
+    if (!valid) {
+      return feedback.error('Please enter a valid weight.', 'Invalid Weight');
     }
 
-    try {
-      const newEntry: WeightEntry = {
-        date: new Date().toLocaleDateString(),
-        weight: weight,
-        timestamp: Date.now(),
-      };
-      
-      const updated = [newEntry, ...weightHistory];
-      await AsyncStorage.setItem('weight_history', JSON.stringify(updated));
-      setWeightHistory(updated);
-      setWeight('');
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch (error) {
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert('Error', 'Failed to log weight.');
-    }
+    await weightManager.add({
+      date: new Date().toLocaleDateString(),
+      weight: weight,
+      timestamp: Date.now(),
+    });
+    setWeight('');
+    await feedback.success();
   };
 
-  const deleteWeightEntry = async (timestamp: number) => {
-    Alert.alert('Delete Entry', 'Remove this weight entry?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          const filtered = weightHistory.filter(e => e.timestamp !== timestamp);
-          await AsyncStorage.setItem('weight_history', JSON.stringify(filtered));
-          setWeightHistory(filtered);
-        },
-      },
-    ]);
+  const deleteWeightEntry = (timestamp: number) => {
+    feedback.confirm('Delete Entry', 'Remove this weight entry?', () => {
+      weightManager.remove(timestamp);
+    });
+  };
+
+  const deleteGlucoseEntry = (timestamp: number) => {
+    feedback.confirm('Delete Entry', 'Remove this glucose entry?', () => {
+      glucoseManager.remove(timestamp);
+    });
+  };
+
+  const deleteInsulinEntry = (timestamp: number) => {
+    feedback.confirm('Delete Entry', 'Remove this insulin entry?', () => {
+      insulinManager.remove(timestamp);
+    });
   };
 
   return (
@@ -528,10 +431,10 @@ export default function GoalsScreen() {
           </Pressable>
         </View>
 
-        {weightHistory.length > 0 && (
+        {weightManager.history.length > 0 && (
           <View style={styles.weightHistory}>
             <Text style={[styles.historyTitle, isDark && styles.historyTitleDark]}>Recent Entries</Text>
-            {weightHistory.slice(0, 10).map((entry) => (
+            {weightManager.history.slice(0, 10).map((entry) => (
               <View key={entry.timestamp} style={[styles.weightEntry, isDark && styles.weightEntryDark]}>
                 <View>
                   <Text style={styles.weightValue}>{entry.weight} kg</Text>
@@ -603,10 +506,10 @@ export default function GoalsScreen() {
                     </Pressable>
                   </View>
 
-                  {glucoseHistory.length > 0 && (
+                  {glucoseManager.history.length > 0 && (
                     <View style={styles.historyBox}>
                       <Text style={[styles.historyLabel, isDark && styles.historyLabelDark]}>Recent Readings</Text>
-                      {glucoseHistory.slice(0, 5).map((entry) => (
+                      {glucoseManager.history.slice(0, 5).map((entry) => (
                         <View key={entry.timestamp} style={[styles.historyEntry, isDark && styles.historyEntryDark]}>
                           <View>
                             <Text style={styles.historyValue}>{entry.glucose} mg/dL</Text>
@@ -662,10 +565,10 @@ export default function GoalsScreen() {
                     placeholderTextColor="#999"
                   />
 
-                  {insulinHistory.length > 0 && (
+                  {insulinManager.history.length > 0 && (
                     <View style={styles.historyBox}>
                       <Text style={[styles.historyLabel, isDark && styles.historyLabelDark]}>Recent Doses</Text>
-                      {insulinHistory.slice(0, 5).map((entry) => (
+                      {insulinManager.history.slice(0, 5).map((entry) => (
                         <View key={entry.timestamp} style={[styles.historyEntry, isDark && styles.historyEntryDark]}>
                           <View style={{ flex: 1 }}>
                             <Text style={styles.historyValue}>{entry.units} units - {entry.type}</Text>
