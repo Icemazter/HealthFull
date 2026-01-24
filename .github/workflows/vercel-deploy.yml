@@ -1,0 +1,34 @@
+name: Vercel Web Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Export web bundle
+        run: npm run export:web
+
+      - name: Deploy to Vercel
+        uses: amondnet/vercel-action@v20
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: team_7owVxWq8rpLNIqv78PolpJUi
+          vercel-project-id: prj_XfDC4MwQEX7S1Gb1Km6ixbTOzPeg
+          vercel-args: '--prebuilt --prod'
+          scope: icemazters-projects
