@@ -426,6 +426,31 @@ export default function ScanScreen() {
               {loading ? '✓ Scanning...' : '📷 Align barcode'}
             </Text>
             {loading && <Text style={styles.loadingText}>Looking up product data</Text>}
+            <Text style={[styles.loadingText, { opacity: 0.7 }]}>Web build only supports QR scanning natively</Text>
+            
+            {/* Test Button - always visible on web */}
+            <Pressable
+              style={{
+                backgroundColor: '#FF3B30',
+                paddingVertical: 16,
+                paddingHorizontal: 20,
+                marginTop: 12,
+                marginHorizontal: 20,
+                borderRadius: 12,
+                alignItems: 'center',
+                elevation: 5,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.3,
+                shadowRadius: 4,
+              }}
+              onPress={() => {
+                console.log('🧪 WEB TEST BUTTON PRESSED');
+                handleBarCodeScanned({ type: 'ean13', data: '5449000000996' });
+              }}>
+              <Text style={{ color: '#fff', fontSize: 16, fontWeight: 'bold' }}>🧪 TEST: Coca-Cola</Text>
+              <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 11, marginTop: 4 }}>5449000000996</Text>
+            </Pressable>
             <Pressable
               style={styles.cancelButton}
               onPress={() => {
