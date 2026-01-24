@@ -32,4 +32,3 @@ jobs:
           vercel-project-id: prj_XfDC4MwQEX7S1Gb1Km6ixbTOzPeg
           vercel-args: '--prod'
           scope: icemazters-projects
-          working-directory: ./dist
