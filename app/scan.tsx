@@ -29,6 +29,7 @@ export default function ScanScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [cameraKey, setCameraKey] = useState(0);
   const [foodData, setFoodData] = useState<FoodData | null>(null);
   const [showOptions, setShowOptions] = useState(false);
   const [customAmount, setCustomAmount] = useState('100');
@@ -88,6 +89,7 @@ export default function ScanScreen() {
     useCallback(() => {
       setScanned(false);
       setLoading(false);
+      setCameraKey((prev) => prev + 1);
       
       // Restart web scanning if needed
       if (isWeb && !scanIntervalRef.current) {
@@ -439,15 +441,16 @@ export default function ScanScreen() {
       ) : (
         <>
           <CameraView
+            key={cameraKey}
             style={styles.camera}
             facing="back"
             barcodeScannerSettings={{
-              enabled: true,
               barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e'],
             }}
+            barcodeScannerEnabled
             onBarcodeScanned={!scanned ? handleBarCodeScanned : undefined}
           />
-          <View style={[styles.overlay, { backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end', paddingBottom: 20 }]}>
+          <View style={[styles.overlay, { backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end', paddingBottom: 20 }]}> 
             <Text style={[styles.instruction, { marginBottom: 20, textAlign: 'center', paddingHorizontal: 20 }]}>
               {loading ? '✓ Scanning...' : scanned ? '✓ Scanned!' : '📷 Align barcode'}
             </Text>
@@ -712,7 +715,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   overlay: {
-    flex: 1,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     backgroundColor: 'rgba(0,0,0,0.2)',
     justifyContent: 'center',
     alignItems: 'center',
