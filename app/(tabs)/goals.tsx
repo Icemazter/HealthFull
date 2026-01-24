@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { StyleSheet, ScrollView, View, Text, TextInput, Pressable, Alert, KeyboardAvoidingView, Platform, useColorScheme } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Palette } from '@/constants/theme';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
+import React, { useEffect, useState } from 'react';
+import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useColorScheme, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface Goals {
   calories: string;
@@ -788,8 +788,8 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   diabetesSection: {
-    marginTop: 20,
-    paddingTop: 16,
+    marginTop: 24,
+    paddingTop: 20,
     borderTopWidth: 1,
     borderTopColor: '#e5e5e5',
   },
@@ -797,22 +797,22 @@ const styles = StyleSheet.create({
     borderTopColor: '#333',
   },
   diabetesSectionTitle: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '700',
     color: Palette.darkGray,
-    marginBottom: 16,
+    marginBottom: 20,
   },
   diabetesSectionTitleDark: {
     color: '#d1d5db',
   },
   historyBox: {
-    marginTop: 20,
+    marginTop: 24,
   },
   historyLabel: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '600',
     color: Palette.darkGray,
-    marginBottom: 8,
+    marginBottom: 12,
   },
   historyLabelDark: {
     color: '#d1d5db',
@@ -821,10 +821,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 12,
+    padding: 14,
     backgroundColor: '#f0f9ff',
-    borderRadius: 8,
-    marginBottom: 8,
+    borderRadius: 10,
+    marginBottom: 10,
     borderWidth: 1,
     borderColor: '#bfdbfe',
   },
@@ -855,13 +855,13 @@ const styles = StyleSheet.create({
   },
   noteInput: {
     backgroundColor: Palette.lightGray2,
-    padding: 12,
+    padding: 14,
     borderRadius: 8,
-    fontSize: 14,
+    fontSize: 15,
     borderWidth: 1,
     borderColor: '#e5e5e5',
     marginTop: 16,
-    marginBottom: 4,
+    marginBottom: 8,
   },
   noteInputDark: {
     backgroundColor: '#262626',
@@ -939,16 +939,17 @@ const styles = StyleSheet.create({
   },
   chipGroup: {
     marginTop: 12,
+    marginBottom: 16,
   },
   chipRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 8,
+    gap: 10,
+    marginTop: 10,
   },
   chip: {
-    paddingVertical: 10,
-    paddingHorizontal: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     borderRadius: 999,
     backgroundColor: Palette.lightGray2,
     borderWidth: 1,
@@ -965,6 +966,7 @@ const styles = StyleSheet.create({
   chipText: {
     color: Palette.darkGray,
     fontWeight: '600',
+    fontSize: 14,
   },
   chipTextDark: {
     color: '#d1d5db',
@@ -993,6 +995,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+    marginTop: 4,
     marginBottom: 20,
   },
   weightInput: {
