@@ -372,7 +372,7 @@ export default function ScanScreen() {
             muted
           />
           <canvas ref={canvasRef} style={{ display: 'none' }} />
-          <View style={styles.overlay}>
+          <View style={styles.webOverlay}>
             <View style={styles.scanArea}>
               {loading && <ActivityIndicator size="large" color="#fff" style={styles.scanAreaLoader} />}
             </View>
@@ -629,6 +629,16 @@ const styles = StyleSheet.create({
     flex: 1,
     width: '100%',
     position: 'relative',
+  },
+  webOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   overlay: {
     flex: 1,
