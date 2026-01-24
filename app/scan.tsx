@@ -112,6 +112,14 @@ export default function ScanScreen() {
     if (!isWeb) return;
     
     try {
+      // Check if permission is already granted
+      const permissionStatus = await navigator.permissions.query({ name: 'camera' as PermissionName });
+      
+      if (permissionStatus.state === 'denied') {
+        Alert.alert('Camera Access Denied', 'Please enable camera access in your browser settings to scan barcodes.');
+        return;
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: 'environment',
@@ -129,7 +137,7 @@ export default function ScanScreen() {
       }
     } catch (error) {
       console.error('Error accessing camera:', error);
-      Alert.alert('Camera Error', 'Could not access camera. Please check permissions.');
+      Alert.alert('Camera Error', 'Could not access camera. Please check permissions in your browser settings.');
     }
   };
 

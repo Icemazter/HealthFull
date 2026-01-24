@@ -33,7 +33,18 @@
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/favicon.png",
+      "bundler": "metro",
+      "backgroundColor": "#ffffff",
+      "themeColor": "#3b82f6",
+      "preferRelatedApplications": false,
+      "display": "standalone",
+      "orientation": "portrait",
+      "startUrl": "/",
+      "scope": "/",
+      "description": "Track your nutrition and fitness goals with HealthFull",
+      "shortName": "HealthFull",
+      "lang": "en"
     },
     "plugins": [
       "expo-router",
