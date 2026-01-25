@@ -1,10 +1,12 @@
 import { EXERCISES, MUSCLE_COLORS } from '@/constants/exercises';
 import { useAppTheme } from '@/hooks/use-theme';
+import { useHevyWorkouts } from '@/hooks/use-hevy-workouts';
+import { HevyWorkoutCard } from '@/components/hevy/hevy-workout-card';
 import { formatDate, formatDuration } from '@/utils/date';
 import { storage, STORAGE_KEYS } from '@/utils/storage';
 import { calculateSetVolume } from '@/utils/workoutCalculations';
 import { router } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 interface Workout {
@@ -16,6 +18,7 @@ interface Workout {
 
 export default function HistoryScreen() {
   const { isDark } = useAppTheme();
+  const { workouts: hevyWorkouts } = useHevyWorkouts();
   const [workouts, setWorkouts] = useState<Workout[]>([]);
 
   useEffect(() => {
@@ -54,67 +57,79 @@ export default function HistoryScreen() {
       </View>
 
       <ScrollView style={styles.content}>
-        {workouts.length === 0 ? (
+        {workouts.length === 0 && hevyWorkouts.length === 0 ? (
           <View style={styles.emptyState}>
             <Text style={styles.emptyText}>No workouts yet</Text>
             <Text style={styles.emptySubtext}>Start your first workout to see it here</Text>
           </View>
         ) : (
-          workouts.map((workout) => {
-            const totalVolume = calculateTotalVolume(workout);
-            const totalSets = workout.exercises?.reduce(
-              (acc, ex) => acc + (ex.sets?.filter((s: any) => s.completed).length || 0),
-              0
-            );
+          <>
+            {/* Hevy Workouts */}
+            {hevyWorkouts.map((hevyWorkout) => (
+              <HevyWorkoutCard
+                key={hevyWorkout.id}
+                workout={hevyWorkout}
+                isDark={isDark}
+              />
+            ))}
 
-            return (
-              <View key={workout.id} style={styles.workoutCard}>
-                <View style={styles.workoutHeader}>
-                  <Text style={styles.workoutDate}>{formatDate(workout.timestamp)}</Text>
-                  <Text style={styles.workoutDuration}>{formatDuration(workout.duration)}</Text>
-                </View>
+            {/* Local Workouts */}
+            {workouts.map((workout) => {
+              const totalVolume = calculateTotalVolume(workout);
+              const totalSets = workout.exercises?.reduce(
+                (acc, ex) => acc + (ex.sets?.filter((s: any) => s.completed).length || 0),
+                0
+              );
 
-                <View style={styles.workoutStats}>
-                  <View style={styles.statBadge}>
-                    <Text style={styles.statValue}>{workout.exercises?.length || 0}</Text>
-                    <Text style={styles.statLabel}>exercises</Text>
+              return (
+                <View key={workout.id} style={styles.workoutCard}>
+                  <View style={styles.workoutHeader}>
+                    <Text style={styles.workoutDate}>{formatDate(workout.timestamp)}</Text>
+                    <Text style={styles.workoutDuration}>{formatDuration(workout.duration)}</Text>
                   </View>
-                  <View style={styles.statBadge}>
-                    <Text style={styles.statValue}>{totalSets}</Text>
-                    <Text style={styles.statLabel}>sets</Text>
+
+                  <View style={styles.workoutStats}>
+                    <View style={styles.statBadge}>
+                      <Text style={styles.statValue}>{workout.exercises?.length || 0}</Text>
+                      <Text style={styles.statLabel}>exercises</Text>
+                    </View>
+                    <View style={styles.statBadge}>
+                      <Text style={styles.statValue}>{totalSets}</Text>
+                      <Text style={styles.statLabel}>sets</Text>
+                    </View>
+                    <View style={styles.statBadge}>
+                      <Text style={styles.statValue}>{totalVolume}</Text>
+                      <Text style={styles.statLabel}>kg volume</Text>
+                    </View>
                   </View>
-                  <View style={styles.statBadge}>
-                    <Text style={styles.statValue}>{totalVolume}</Text>
-                    <Text style={styles.statLabel}>kg volume</Text>
+
+                  <View style={styles.exercisesList}>
+                    {workout.exercises?.map((exercise, index) => {
+                      const exerciseData = EXERCISES.find(e => e.id === exercise.exerciseId);
+                      if (!exerciseData) return null;
+
+                      const completedSets = exercise.sets?.filter((s: any) => s.completed) || [];
+
+                      return (
+                        <View key={index} style={styles.exerciseRow}>
+                          <View
+                            style={[
+                              styles.muscleDot,
+                              { backgroundColor: MUSCLE_COLORS[exerciseData.primary] },
+                            ]}
+                          />
+                          <Text style={styles.exerciseName}>{exerciseData.name}</Text>
+                          <Text style={styles.exerciseSets}>
+                            {completedSets.length} × {completedSets[0]?.weight || 0}kg
+                          </Text>
+                        </View>
+                      );
+                    })}
                   </View>
                 </View>
-
-                <View style={styles.exercisesList}>
-                  {workout.exercises?.map((exercise, index) => {
-                    const exerciseData = EXERCISES.find(e => e.id === exercise.exerciseId);
-                    if (!exerciseData) return null;
-
-                    const completedSets = exercise.sets?.filter((s: any) => s.completed) || [];
-
-                    return (
-                      <View key={index} style={styles.exerciseRow}>
-                        <View
-                          style={[
-                            styles.muscleDot,
-                            { backgroundColor: MUSCLE_COLORS[exerciseData.primary] },
-                          ]}
-                        />
-                        <Text style={styles.exerciseName}>{exerciseData.name}</Text>
-                        <Text style={styles.exerciseSets}>
-                          {completedSets.length} × {completedSets[0]?.weight || 0}kg
-                        </Text>
-                      </View>
-                    );
-                  })}
-                </View>
-              </View>
-            );
-          })
+              );
+            })}
+          </>
         )}
       </ScrollView>
     </View>

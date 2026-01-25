@@ -1,5 +1,6 @@
 import { EXERCISES, MUSCLE_COLORS, type Exercise } from '@/constants/exercises';
 import { useAppTheme } from '@/hooks/use-theme';
+import { useHevyWorkouts } from '@/hooks/use-hevy-workouts';
 import { feedback } from '@/utils/feedback';
 import { storage, STORAGE_KEYS } from '@/utils/storage';
 import {
@@ -10,6 +11,8 @@ import {
     getLastWorkout,
     WorkoutSet
 } from '@/utils/workoutCalculations';
+import { HevyApiKeyModal } from '@/components/hevy/hevy-api-key-modal';
+import { HevyWorkoutCard } from '@/components/hevy/hevy-workout-card';
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
@@ -29,6 +32,7 @@ import {
 
 export default function WorkoutScreen() {
   const { isDark } = useAppTheme();
+  const { workouts: hevyWorkouts, apiKeySet, setApiKey, isLoading: hevyLoading, error: hevyError } = useHevyWorkouts();
   const [exercises, setExercises] = useState<ExerciseSession[]>([]);
   const [showExercisePicker, setShowExercisePicker] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -42,6 +46,7 @@ export default function WorkoutScreen() {
   const [showCustomInput, setShowCustomInput] = useState(false);
   const [customExerciseName, setCustomExerciseName] = useState('');
   const [customExerciseMuscle, setCustomExerciseMuscle] = useState<string>('Chest');
+  const [showHevyApiModal, setShowHevyApiModal] = useState(false);
 
   useEffect(() => {
     loadHistory();
@@ -287,8 +292,8 @@ export default function WorkoutScreen() {
             <Text style={[styles.title, isDark && styles.titleDark]}>Active Workout</Text>
             <Text style={[styles.elapsedText, isDark && styles.elapsedTextDark]}>⏱ {formatSeconds(elapsed)}</Text>
           </View>
-          <Pressable onPress={finishWorkout}>
-            <Text style={[styles.finishButton, isDark && styles.finishButtonDark]}>Finish</Text>
+          <Pressable onPress={() => setShowHevyApiModal(true)} hitSlop={10}>
+            <Text style={[styles.finishButton, isDark && styles.finishButtonDark]}>⚙️</Text>
           </Pressable>
         </View>
 
@@ -449,6 +454,14 @@ export default function WorkoutScreen() {
           <Text style={styles.addExerciseText}>+ Add Exercise</Text>
         </Pressable>
       </ScrollView>
+
+      <HevyApiKeyModal
+        visible={showHevyApiModal}
+        onApiKeySubmit={setApiKey}
+        onCancel={() => setShowHevyApiModal(false)}
+        isLoading={hevyLoading}
+        error={hevyError}
+      />
 
       <Modal
         visible={showExercisePicker}

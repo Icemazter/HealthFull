@@ -111,4 +111,6 @@ export const STORAGE_KEYS = {
   WATER_TODAY: 'water_today',
   WORKOUT_HISTORY: 'workout_history',
   RECIPES: 'recipes',
+  HEVY_API_KEY: 'hevy_api_key',
+  CUSTOM_EXERCISES: 'custom_exercises',
 } as const;
