@@ -54,10 +54,13 @@ export const RecipesList = React.memo(function RecipesList({
                       {
                         text: 'Delete',
                         style: 'destructive',
-                        onPress: () => onDeleteRecipe(recipe.id),
+                        onPress: async () => {
+                          await onDeleteRecipe(recipe.id);
+                        },
                       },
                     ]);
-                  }}>
+                  }}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                   <Text style={styles.deleteButton}>✕</Text>
                 </Pressable>
               </View>

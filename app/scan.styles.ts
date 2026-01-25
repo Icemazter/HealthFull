@@ -86,6 +86,7 @@ export const scanStyles = StyleSheet.create({
     flex: 1,
     height: '100%',
     backgroundColor: 'rgba(0,0,0,0.2)',
+    pointerEvents: 'none',
   },
   scanFrame: {
     width: '80%',

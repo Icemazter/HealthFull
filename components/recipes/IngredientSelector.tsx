@@ -4,15 +4,13 @@ import { STORAGE_KEYS, storage } from '@/utils/storage';
 import React, { useState } from 'react';
 import {
     Alert,
-    Keyboard,
     Modal,
     Pressable,
     ScrollView,
     StyleSheet,
     Text,
     TextInput,
-    TouchableWithoutFeedback,
-    View,
+    View
 } from 'react-native';
 
 interface IngredientSelectorProps {
@@ -123,33 +121,32 @@ export const IngredientSelector = React.memo(function IngredientSelector({
 
   return (
     <Modal visible={visible} animationType="slide" transparent={false}>
-      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-        <View style={styles.container}>
-          <View style={styles.header}>
-            <Pressable onPress={onCancel}>
-              <Text style={styles.closeButton}>✕</Text>
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <Pressable onPress={onCancel}>
+            <Text style={styles.closeButton}>✕</Text>
+          </Pressable>
+          <Text style={styles.headerTitle}>Add Ingredient</Text>
+          <View style={{ width: 40 }} />
+        </View>
+
+        <View style={styles.tabs}>
+          {(['scan', 'manual', 'saved'] as const).map((tab) => (
+            <Pressable
+              key={tab}
+              style={[styles.tab, activeTab === tab && styles.tabActive]}
+              onPress={() => setActiveTab(tab)}>
+              <Text
+                style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>
+                {tab === 'scan' && '📷 Scan'}
+                {tab === 'manual' && '✏️ Manual'}
+                {tab === 'saved' && '⭐ Saved'}
+              </Text>
             </Pressable>
-            <Text style={styles.headerTitle}>Add Ingredient</Text>
-            <View style={{ width: 40 }} />
-          </View>
+          ))}
+        </View>
 
-          <View style={styles.tabs}>
-            {(['scan', 'manual', 'saved'] as const).map((tab) => (
-              <Pressable
-                key={tab}
-                style={[styles.tab, activeTab === tab && styles.tabActive]}
-                onPress={() => setActiveTab(tab)}>
-                <Text
-                  style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>
-                  {tab === 'scan' && '📷 Scan'}
-                  {tab === 'manual' && '✏️ Manual'}
-                  {tab === 'saved' && '⭐ Saved'}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-
-          <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        <ScrollView style={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
             {activeTab === 'scan' && (
               <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Scan a barcode</Text>
@@ -280,7 +277,6 @@ export const IngredientSelector = React.memo(function IngredientSelector({
             )}
           </ScrollView>
         </View>
-      </TouchableWithoutFeedback>
     </Modal>
   );
 });
