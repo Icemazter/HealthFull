@@ -62,7 +62,7 @@ export const scanStyles = StyleSheet.create({
     left: 0,
     right: 0,
     height: '15%',
-    backgroundColor: 'rgba(0,0,0,0.2)',
+    backgroundColor: 'rgba(0,0,0,0.8)',
   },
   bottomDarkArea: {
     position: 'absolute',
@@ -70,7 +70,7 @@ export const scanStyles = StyleSheet.create({
     left: 0,
     right: 0,
     height: '15%',
-    backgroundColor: 'rgba(0,0,0,0.2)',
+    backgroundColor: 'rgba(0,0,0,0.8)',
   },
   middleSection: {
     position: 'absolute',
@@ -85,7 +85,7 @@ export const scanStyles = StyleSheet.create({
   sideDarkArea: {
     flex: 1,
     height: '100%',
-    backgroundColor: 'rgba(0,0,0,0.2)',
+    backgroundColor: 'rgba(0,0,0,0.8)',
     pointerEvents: 'none',
   },
   scanFrame: {
