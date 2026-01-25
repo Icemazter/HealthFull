@@ -194,17 +194,19 @@ export default function ScanScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
 
-    // Celebration pulse animation
+    // Enhanced celebration pulse animation
     Animated.sequence([
       Animated.spring(celebrationScale, {
-        toValue: 1.08,
+        toValue: 1.12,
         useNativeDriver: true,
-        speed: 20,
+        speed: 18,
+        bounciness: 8,
       }),
       Animated.spring(celebrationScale, {
         toValue: 1,
         useNativeDriver: true,
-        speed: 12,
+        speed: 14,
+        bounciness: 6,
       }),
     ]).start();
   };

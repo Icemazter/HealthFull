@@ -69,6 +69,7 @@ export const RecipeBuilder = React.memo(function RecipeBuilder({
             style={styles.input}
             value={recipeName}
             onChangeText={setRecipeName}
+            onSubmitEditing={(e) => setRecipeName(e.nativeEvent.text || recipeName)}
             placeholder="e.g., Meal Prep Chicken Bowl"
             placeholderTextColor={Palette.gray}
             autoCapitalize="words"
