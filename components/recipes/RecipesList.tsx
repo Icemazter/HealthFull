@@ -47,7 +47,8 @@ export const RecipesList = React.memo(function RecipesList({
               <View style={styles.recipeHeader}>
                 <Text style={styles.recipeName}>{recipe.name}</Text>
                 <Pressable
-                  onPress={() => {
+                  onPress={(e) => {
+                    e.stopPropagation?.();
                     Alert.alert('Delete Recipe', `Delete "${recipe.name}"?`, [
                       { text: 'Cancel', style: 'cancel' },
                       {

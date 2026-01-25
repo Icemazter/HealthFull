@@ -97,6 +97,11 @@ export default function ScanScreen() {
       setLoading(false);
       setCameraKey((prev) => prev + 1);
       
+      // Request camera permission on focus if not granted
+      if (!isWeb && permission && !permission.granted) {
+        requestPermission();
+      }
+      
       // Restart web scanning if needed
       if (isWeb && !webScannerRunningRef.current) {
         startBarcodeScanning();
@@ -108,7 +113,7 @@ export default function ScanScreen() {
           stopWebScanner();
         }
       };
-    }, [isWeb])
+    }, [isWeb, permission, requestPermission])
   );
 
   // Convert units for baking/powders
