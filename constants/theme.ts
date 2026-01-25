@@ -44,6 +44,20 @@ export const Palette = {
   warning: '#ff9800',
 };
 
+// Simple static theme object used by memoized UI components
+export const theme = {
+  colors: {
+    primary: Palette.primary,
+    text: '#111827',
+    textSecondary: '#6b7280',
+    cardAlt: '#f3f4f6',
+    blue: '#2563eb',
+    green: '#16a34a',
+    yellow: '#f59e0b',
+    purple: '#8b5cf6',
+  },
+};
+
 export const Fonts = Platform.select({
   ios: {
     /** iOS `UIFontDescriptorSystemDesignDefault` */
