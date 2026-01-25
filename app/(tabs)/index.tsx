@@ -258,32 +258,6 @@ export default function HomeScreen() {
         </View>
       </ThemedView>
 
-      {/* Water Tracker */}
-      <View style={[styles.waterCard, isDark && styles.waterCardDark]}>
-        <Text style={[styles.waterTitle, isDark && styles.waterTitleDark]}>💧 Water Intake</Text>
-        <Text style={[styles.waterAmount, isDark && styles.waterAmountDark]}>{foodManager.water}ml / 2000ml</Text>
-        <View style={styles.progressBarContainer}>
-          <View 
-            style={[
-              styles.progressBar,
-              styles.waterProgressBar,
-              { width: `${Math.min((foodManager.water / 2000) * 100, 100)}%` }
-            ]} 
-          />
-        </View>
-        <View style={styles.waterButtons}>
-          <Pressable style={[styles.waterButton, isDark && styles.waterButtonDark]} onPress={() => foodManager.addWater(250)}>
-            <Text style={[styles.waterButtonText, isDark && styles.waterButtonTextDark]}>+250ml</Text>
-          </Pressable>
-          <Pressable style={[styles.waterButton, isDark && styles.waterButtonDark]} onPress={() => foodManager.addWater(500)}>
-            <Text style={[styles.waterButtonText, isDark && styles.waterButtonTextDark]}>+500ml</Text>
-          </Pressable>
-          <Pressable style={[styles.waterButton, isDark && styles.waterButtonDark]} onPress={() => foodManager.addWater(-250)}>
-            <Text style={[styles.waterButtonText, isDark && styles.waterButtonTextDark]}>-250ml</Text>
-          </Pressable>
-        </View>
-      </View>
-
       <Pressable
         style={[styles.scanButton, isDark && styles.scanButtonDark]}
         onPress={() => router.push('/scan')}>
@@ -567,66 +541,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: 'rgba(255,255,255,0.6)',
     marginTop: 2,
-  },
-  waterCard: {
-    margin: 16,
-    marginTop: 0,
-    padding: 20,
-    backgroundColor: Palette.white,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#e5e5e5',
-  },
-  waterCardDark: {
-    backgroundColor: '#1a1a1a',
-    borderColor: '#333',
-  },
-  waterTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: Palette.primary,
-    marginBottom: 12,
-  },
-  waterTitleDark: {
-    color: '#60a5fa',
-  },
-  waterAmount: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: Palette.primary,
-    marginBottom: 12,
-  },
-  waterAmountDark: {
-    color: '#60a5fa',
-  },
-  waterProgressBar: {
-    backgroundColor: '#60a5fa',
-  },
-  waterButtons: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 12,
-  },
-  waterButton: {
-    flex: 1,
-    backgroundColor: Palette.lightGray2,
-    padding: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#e5e5e5',
-  },
-  waterButtonDark: {
-    backgroundColor: '#262626',
-    borderColor: '#404040',
-  },
-  waterButtonText: {
-    color: Palette.primary,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  waterButtonTextDark: {
-    color: '#60a5fa',
   },
   scanButton: {
     backgroundColor: Palette.primary,
