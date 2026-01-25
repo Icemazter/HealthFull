@@ -1,16 +1,19 @@
+import { IngredientSelector, RecipeBuilder, RecipesList } from '@/components/recipes';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { FoodEntryCard } from '@/components/ui/food-entry-card';
 import { Palette } from '@/constants/theme';
 import { FoodEntry, useFoodManager } from '@/hooks/use-food-manager';
 import { usePersistedState } from '@/hooks/use-persisted-state';
+import { useRecipes } from '@/hooks/use-recipes';
 import { useAppTheme } from '@/hooks/use-theme';
 import { feedback } from '@/utils/feedback';
+import { addIngredientToRecipe, Recipe } from '@/utils/recipes';
 import { STORAGE_KEYS } from '@/utils/storage';
 import { useFocusEffect } from '@react-navigation/native';
 import { router } from 'expo-router';
 import React, { useCallback, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const mealOrder: Array<'Breakfast' | 'Lunch' | 'Dinner' | 'Snack' | 'Other'> = [
@@ -24,9 +27,13 @@ const mealOrder: Array<'Breakfast' | 'Lunch' | 'Dinner' | 'Snack' | 'Other'> = [
 export default function HomeScreen() {
   const { isDark, toggleTheme } = useAppTheme();
   const foodManager = useFoodManager();
+  const { recipes, addRecipe, deleteRecipe, updateRecipe } = useRecipes();
   const [goals, setGoals] = usePersistedState(STORAGE_KEYS.MACRO_GOALS, { calories: 2000, protein: 150, carbs: 200, fat: 65, fiber: 30 });
   const [diabetesMode] = usePersistedState(STORAGE_KEYS.DIABETES_MODE, false);
   const [focusedMacro, setFocusedMacro] = useState<'calories' | 'protein' | 'carbs' | 'fat' | 'fiber'>('calories');
+  const [showRecipeBuilder, setShowRecipeBuilder] = useState(false);
+  const [currentRecipe, setCurrentRecipe] = useState<Recipe | null>(null);
+  const [showIngredientSelector, setShowIngredientSelector] = useState(false);
   const insets = useSafeAreaInsets();
 
   useFocusEffect(
@@ -78,10 +85,49 @@ export default function HomeScreen() {
   const handleClearToday = useCallback(() => {
     feedback.confirm(
       'Clear Today\'s Entries',
-      'This will remove all food items logged today. This cannot be undone.',
+      'Delete all food entries for today?',
       () => foodManager.clearToday()
     );
   }, [foodManager]);
+
+  const handleCreateRecipe = useCallback(async () => {
+    Alert.prompt(
+      'Recipe Name',
+      'Enter a name for your recipe',
+      async (name: string) => {
+        if (name.trim()) {
+          const recipe = await addRecipe(name);
+          setCurrentRecipe(recipe);
+          setShowRecipeBuilder(true);
+        }
+      }
+    );
+  }, [addRecipe]);
+
+  const handleSelectRecipe = useCallback((recipe: Recipe) => {
+    setCurrentRecipe(recipe);
+    setShowRecipeBuilder(true);
+  }, []);
+
+  const handleSaveRecipe = useCallback(
+    async (recipe: Recipe) => {
+      await updateRecipe(recipe);
+      setShowRecipeBuilder(false);
+      setCurrentRecipe(null);
+    },
+    [updateRecipe]
+  );
+
+  const handleAddIngredient = useCallback(
+    (ingredient: any) => {
+      if (currentRecipe) {
+        const updated = addIngredientToRecipe(currentRecipe, ingredient);
+        setCurrentRecipe(updated);
+      }
+      setShowIngredientSelector(false);
+    },
+    [currentRecipe]
+  );
 
   const handleRemoveEntry = useCallback((id: string) => {
     feedback.confirm(
@@ -198,6 +244,14 @@ export default function HomeScreen() {
         </ThemedView>
       )}
 
+      {/* Recipes Section */}
+      <RecipesList
+        recipes={recipes}
+        onSelectRecipe={handleSelectRecipe}
+        onDeleteRecipe={deleteRecipe}
+        onCreateNew={handleCreateRecipe}
+      />
+
       <ThemedView style={styles.listContainer}>
         <ThemedText type="subtitle" style={styles.listTitle}>Food Log</ThemedText>
         {foodManager.entries.length === 0 ? (
@@ -222,6 +276,30 @@ export default function HomeScreen() {
               ))}
             </View>
           ))
+        )}
+
+        {currentRecipe && (
+          <>
+            <RecipeBuilder
+              visible={showRecipeBuilder}
+              recipe={currentRecipe}
+              onSave={handleSaveRecipe}
+              onCancel={() => {
+                setShowRecipeBuilder(false);
+                setCurrentRecipe(null);
+              }}
+              onAddIngredientPressed={() => setShowIngredientSelector(true)}
+            />
+            <IngredientSelector
+              visible={showIngredientSelector}
+              onSelect={handleAddIngredient}
+              onCancel={() => setShowIngredientSelector(false)}
+              onScanPressed={() => {
+                // Navigate to scan with recipe context
+                setShowIngredientSelector(false);
+              }}
+            />
+          </>
         )}
       </ThemedView>
     </ScrollView>

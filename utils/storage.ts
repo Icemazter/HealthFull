@@ -110,4 +110,5 @@ export const STORAGE_KEYS = {
   DARK_MODE: 'dark_mode_preference',
   WATER_TODAY: 'water_today',
   WORKOUT_HISTORY: 'workout_history',
+  RECIPES: 'recipes',
 } as const;
