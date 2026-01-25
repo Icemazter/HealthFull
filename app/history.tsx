@@ -1,12 +1,12 @@
-import { EXERCISES, MUSCLE_COLORS } from '@/constants/exercises';
-import { useAppTheme } from '@/hooks/use-theme';
-import { useHevyWorkouts } from '@/hooks/use-hevy-workouts';
 import { HevyWorkoutCard } from '@/components/hevy/hevy-workout-card';
+import { EXERCISES, MUSCLE_COLORS } from '@/constants/exercises';
+import { useHevyWorkouts } from '@/hooks/use-hevy-workouts';
+import { useAppTheme } from '@/hooks/use-theme';
 import { formatDate, formatDuration } from '@/utils/date';
 import { storage, STORAGE_KEYS } from '@/utils/storage';
 import { calculateSetVolume } from '@/utils/workoutCalculations';
 import { router } from 'expo-router';
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 interface Workout {

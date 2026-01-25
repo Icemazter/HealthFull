@@ -1,7 +1,7 @@
 import { Palette } from '@/constants/theme';
 import { HevyWorkoutSession } from '@/hooks/use-hevy-workouts';
 import React from 'react';
-import { StyleSheet, Text, View, Pressable } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 interface HevyWorkoutCardProps {
   workout: HevyWorkoutSession;

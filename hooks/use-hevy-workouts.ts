@@ -1,7 +1,7 @@
+import { hevyService, HevyWorkout } from '@/utils/hevy';
+import { storage, STORAGE_KEYS } from '@/utils/storage';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
-import { HevyWorkout, hevyService } from '@/utils/hevy';
-import { storage, STORAGE_KEYS } from '@/utils/storage';
 
 export interface HevyWorkoutSession {
   id: string;

@@ -1,6 +1,7 @@
+import { HevyApiKeyModal } from '@/components/hevy/hevy-api-key-modal';
 import { EXERCISES, MUSCLE_COLORS, type Exercise } from '@/constants/exercises';
-import { useAppTheme } from '@/hooks/use-theme';
 import { useHevyWorkouts } from '@/hooks/use-hevy-workouts';
+import { useAppTheme } from '@/hooks/use-theme';
 import { feedback } from '@/utils/feedback';
 import { storage, STORAGE_KEYS } from '@/utils/storage';
 import {
@@ -11,8 +12,6 @@ import {
     getLastWorkout,
     WorkoutSet
 } from '@/utils/workoutCalculations';
-import { HevyApiKeyModal } from '@/components/hevy/hevy-api-key-modal';
-import { HevyWorkoutCard } from '@/components/hevy/hevy-workout-card';
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
