@@ -269,6 +269,15 @@ export const scanStyles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
+  imageSkeleton: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: '#e0e0e0',
+    borderRadius: 16,
+  },
   imagePinIcon: {
     position: 'absolute',
     top: 8,
@@ -489,6 +498,28 @@ export const scanStyles = StyleSheet.create({
   },
   servingSizeLabelRow: {
     marginBottom: 14,
+  },
+  // Unified amount container - combines serving size & total amount
+  unifiedAmountContainer: {
+    marginBottom: 20,
+    padding: 18,
+    backgroundColor: Palette.white,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#e8e8e8',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  amountSection: {
+    marginBottom: 0,
+  },
+  dividerLine: {
+    height: 1,
+    backgroundColor: '#e8e8e8',
+    marginVertical: 20,
   },
   // Meal container
   mealContainer: {

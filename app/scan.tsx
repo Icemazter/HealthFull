@@ -49,6 +49,8 @@ export default function ScanScreen() {
   });
   const [celebrationScale] = useState(new Animated.Value(1));
   const [imageScale] = useState(new Animated.Value(1));
+  const [shimmerAnim] = useState(new Animated.Value(0));
+  const [imageLoaded, setImageLoaded] = useState(false);
   const [unitType, setUnitType] = useState<VolumeUnit>('g'); // allow kitchen-friendly units
   const [mealType, setMealType] = useState<'Breakfast' | 'Lunch' | 'Dinner' | 'Snack'>('Breakfast');
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -87,6 +89,22 @@ export default function ScanScreen() {
     if (isWeb) {
       initWebCamera();
     }
+
+    // Start shimmer animation
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(shimmerAnim, {
+          toValue: 1,
+          duration: 1500,
+          useNativeDriver: true,
+        }),
+        Animated.timing(shimmerAnim, {
+          toValue: 0,
+          duration: 1500,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
 
     return () => {
       if (isWeb) {
@@ -539,6 +557,7 @@ export default function ScanScreen() {
     setCustomAmount('100');
     setServingSize('100');
     setShowEnlargedImage(false);
+    setImageLoaded(false);
     // Restart scanning on web
     if (isWeb) {
       startBarcodeScanning();
@@ -692,15 +711,33 @@ export default function ScanScreen() {
                 <Pressable 
                   style={styles.imageContainer}
                   onPress={animateImageTap}>
+                  {!imageLoaded && (
+                    <Animated.View 
+                      style={[
+                        styles.imageSkeleton,
+                        {
+                          opacity: shimmerAnim.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [0.3, 0.7],
+                          }),
+                        },
+                      ]}
+                    />
+                  )}
                   <Image 
                     source={{ uri: foodData.imageUrl }} 
-                    style={styles.productImage}
+                    style={[styles.productImage, { opacity: imageLoaded ? 1 : 0 }]}
                     resizeMode="cover"
+                    onLoad={() => setImageLoaded(true)}
                   />
-                  <View style={styles.imagePinIcon}>
-                    <Text style={styles.imagePinText}>📌</Text>
-                  </View>
-                  <Text style={styles.tapToEnlarge}>Tap to enlarge</Text>
+                  {imageLoaded && (
+                    <>
+                      <View style={styles.imagePinIcon}>
+                        <Text style={styles.imagePinText}>📌</Text>
+                      </View>
+                      <Text style={styles.tapToEnlarge}>Tap to enlarge</Text>
+                    </>
+                  )}
                 </Pressable>
               </Animated.View>
             )}
@@ -730,41 +767,6 @@ export default function ScanScreen() {
               </View>
             </View>
 
-            <View style={styles.servingSizeContainer}>
-              <View style={styles.servingSizeLabelRow}>
-                <Text style={styles.servingSizeLabel}>⚖️ Serving Size</Text>
-                <View style={styles.unitSelector}>
-                  {['g', 'ml', 'dl', 'tbsp', 'tsp'].map((unit) => (
-                    <Pressable
-                      key={unit}
-                      style={[styles.unitButton, unitType === unit && styles.unitButtonActive]}
-                      onPress={() => {
-                        const converted = convertServingSize(servingSize, unitType, unit as 'g' | 'ml' | 'dl' | 'tbsp' | 'tsp');
-                        setServingSize(converted);
-                        setUnitType(unit as 'g' | 'ml' | 'dl' | 'tbsp' | 'tsp');
-                      }}>
-                      <Text style={[styles.unitButtonText, unitType === unit && styles.unitButtonTextActive]}>
-                        {unit}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
-              </View>
-              <View style={styles.servingSizeInputRow}>
-                <TextInput
-                  style={styles.servingSizeInput}
-                  value={servingSize}
-                  onChangeText={setServingSize}
-                  keyboardType="decimal-pad"
-                  placeholder="100"
-                />
-                <Text style={styles.servingSizeUnit}>{unitType}</Text>
-              </View>
-              <Text style={styles.servingSizeHint}>
-                Each item: {servingSize || 100}{unitType}
-              </Text>
-            </View>
-
             <View style={styles.mealContainer}>
               <Text style={styles.quantityLabel}>🍽️ Meal</Text>
               <View style={styles.mealChips}>
@@ -787,21 +789,65 @@ export default function ScanScreen() {
               </View>
             </View>
 
-            <View style={styles.quantityContainer}>
-              <Text style={styles.quantityLabel}>🔢 Total Amount</Text>
-              <View style={styles.quantityInputRow}>
-                <TextInput
-                  style={styles.quantityInput}
-                  value={customAmount}
-                  onChangeText={setCustomAmount}
-                  keyboardType="decimal-pad"
-                  placeholder="100"
-                />
-                <Text style={styles.servingSizeUnit}>{unitType}</Text>
+            <View style={styles.unifiedAmountContainer}>
+              <View style={styles.amountSection}>
+                <Text style={styles.quantityLabel}>⚖️ Serving Size per Item</Text>
+                <View style={styles.unitSelector}>
+                  {['g', 'ml', 'dl', 'tbsp', 'tsp'].map((unit) => (
+                    <Pressable
+                      key={unit}
+                      style={[styles.unitButton, unitType === unit && styles.unitButtonActive]}
+                      onPress={() => {
+                        if (!isWeb) {
+                          Haptics.selectionAsync();
+                        }
+                        const converted = convertServingSize(servingSize, unitType, unit as 'g' | 'ml' | 'dl' | 'tbsp' | 'tsp');
+                        setServingSize(converted);
+                        setUnitType(unit as 'g' | 'ml' | 'dl' | 'tbsp' | 'tsp');
+                      }}>
+                      <Text style={[styles.unitButtonText, unitType === unit && styles.unitButtonTextActive]}>
+                        {unit}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+                <View style={styles.servingSizeInputRow}>
+                  <TextInput
+                    style={styles.servingSizeInput}
+                    value={servingSize}
+                    onChangeText={setServingSize}
+                    onSubmitEditing={(e) => setServingSize(e.nativeEvent.text || servingSize)}
+                    keyboardType="decimal-pad"
+                    placeholder="100"
+                    placeholderTextColor="#999"
+                  />
+                  <Text style={styles.servingSizeUnit}>{unitType}</Text>
+                </View>
+                <Text style={styles.servingSizeHint}>
+                  Each item: {servingSize || 100}{unitType}
+                </Text>
               </View>
-              <Text style={styles.servingSizeHint}>
-                Enter how much you consumed
-              </Text>
+
+              <View style={styles.dividerLine} />
+
+              <View style={styles.amountSection}>
+                <Text style={styles.quantityLabel}>🔢 Total Amount Consumed</Text>
+                <View style={styles.quantityInputRow}>
+                  <TextInput
+                    style={styles.quantityInput}
+                    value={customAmount}
+                    onChangeText={setCustomAmount}
+                    onSubmitEditing={(e) => setCustomAmount(e.nativeEvent.text || customAmount)}
+                    keyboardType="decimal-pad"
+                    placeholder="100"
+                    placeholderTextColor="#999"
+                  />
+                  <Text style={styles.servingSizeUnit}>{unitType}</Text>
+                </View>
+                <Text style={styles.servingSizeHint}>
+                  Total you consumed
+                </Text>
+              </View>
             </View>
 
             <Animated.View style={[{ transform: [{ scale: celebrationScale }] }]}>
