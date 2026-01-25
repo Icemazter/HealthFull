@@ -266,6 +266,11 @@ const styles = StyleSheet.create({
   containerDark: {
     backgroundColor: '#0a0a0a',
   },
+  mediaContainer: {
+    flex: 1,
+    maxWidth: 1200,
+    alignSelf: 'center',
+  },
   header: {
     paddingBottom: 20,
     paddingHorizontal: 20,
