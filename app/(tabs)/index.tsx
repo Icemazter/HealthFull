@@ -1,4 +1,4 @@
-import { IngredientSelector, RecipeBuilder, RecipesList } from '@/components/recipes';
+import { IngredientSelector, RecipeBuilder, RecipeLogger, RecipesList } from '@/components/recipes';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { FoodEntryCard } from '@/components/ui/food-entry-card';
@@ -34,6 +34,8 @@ export default function HomeScreen() {
   const [showRecipeBuilder, setShowRecipeBuilder] = useState(false);
   const [currentRecipe, setCurrentRecipe] = useState<Recipe | null>(null);
   const [showIngredientSelector, setShowIngredientSelector] = useState(false);
+  const [showRecipeLogger, setShowRecipeLogger] = useState(false);
+  const [selectedRecipeForLogging, setSelectedRecipeForLogging] = useState<Recipe | null>(null);
   const insets = useSafeAreaInsets();
 
   useFocusEffect(
@@ -161,6 +163,30 @@ export default function HomeScreen() {
     foodManager.toggleFavorite(item);
   }, [foodManager]);
 
+  const handleLogRecipe = useCallback(
+    async (scaledNutrition: { calories: number; protein: number; carbs: number; fat: number; fiber: number }) => {
+      if (!selectedRecipeForLogging) return;
+      
+      const entry: FoodEntry = {
+        id: `recipe_${Date.now()}`,
+        name: selectedRecipeForLogging.name,
+        calories: scaledNutrition.calories,
+        protein: scaledNutrition.protein,
+        carbs: scaledNutrition.carbs,
+        fat: scaledNutrition.fat,
+        fiber: scaledNutrition.fiber,
+        timestamp: Date.now(),
+        mealType: 'Lunch',
+      };
+      
+      await foodManager.addEntry(entry);
+      setShowRecipeLogger(false);
+      setSelectedRecipeForLogging(null);
+      await feedback.success(`${selectedRecipeForLogging.name} logged!`);
+    },
+    [selectedRecipeForLogging, foodManager]
+  );
+
   return (
     <>
       <ScrollView style={[styles.container, isDark && styles.containerDark]}>
@@ -270,6 +296,10 @@ export default function HomeScreen() {
         onSelectRecipe={handleSelectRecipe}
         onDeleteRecipe={handleDeleteRecipe}
         onCreateNew={handleCreateRecipe}
+        onLogRecipe={(recipe) => {
+          setSelectedRecipeForLogging(recipe);
+          setShowRecipeLogger(true);
+        }}
       />
 
       <ThemedView style={styles.listContainer}>
@@ -321,6 +351,18 @@ export default function HomeScreen() {
               }}
             />
           </>
+        )}
+
+        {selectedRecipeForLogging && (
+          <RecipeLogger
+            visible={showRecipeLogger}
+            recipe={selectedRecipeForLogging}
+            onLog={handleLogRecipe}
+            onCancel={() => {
+              setShowRecipeLogger(false);
+              setSelectedRecipeForLogging(null);
+            }}
+          />
         )}
       </ThemedView>
     </ScrollView>

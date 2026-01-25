@@ -2,7 +2,6 @@ import { Palette } from '@/constants/theme';
 import { Recipe } from '@/utils/recipes';
 import React, { useState } from 'react';
 import {
-    Alert,
     Pressable,
     ScrollView,
     StyleSheet,
@@ -15,6 +14,7 @@ interface RecipeListProps {
   onSelectRecipe: (recipe: Recipe) => void;
   onDeleteRecipe: (recipeId: string) => void;
   onCreateNew: () => void;
+  onLogRecipe?: (recipe: Recipe) => void;
 }
 
 export const RecipesList = React.memo(function RecipesList({
@@ -22,25 +22,9 @@ export const RecipesList = React.memo(function RecipesList({
   onSelectRecipe,
   onDeleteRecipe,
   onCreateNew,
+  onLogRecipe,
 }: RecipeListProps) {
   const [editMode, setEditMode] = useState(false);
-
-  const handleDelete = (recipe: Recipe) => {
-    Alert.alert(
-      'Delete Recipe',
-      `Are you sure you want to delete "${recipe.name}"?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => {
-            onDeleteRecipe(recipe.id);
-          },
-        },
-      ]
-    );
-  };
 
   return (
     <View style={styles.container}>
@@ -73,8 +57,14 @@ export const RecipesList = React.memo(function RecipesList({
             <View key={recipe.id} style={styles.recipeRow}>
               {editMode && (
                 <Pressable
-                  style={styles.deleteCircle}
-                  onPress={() => handleDelete(recipe)}>
+                  style={({ pressed }) => [
+                    styles.deleteCircle,
+                    pressed && styles.deleteCirclePressed,
+                  ]}
+                  onPress={() => {
+                    console.log('Delete pressed for:', recipe.id);
+                    onDeleteRecipe(recipe.id);
+                  }}>
                   <Text style={styles.deleteCircleText}>−</Text>
                 </Pressable>
               )}
@@ -87,7 +77,18 @@ export const RecipesList = React.memo(function RecipesList({
                     {recipe.ingredients.length} ingredients • {recipe.totalWeightInGrams}g total
                   </Text>
                 </View>
-                {!editMode && <Text style={styles.chevron}>›</Text>}
+                {!editMode && (
+                  <View style={styles.recipeActions}>
+                    {onLogRecipe && (
+                      <Pressable
+                        style={styles.logButton}
+                        onPress={() => onLogRecipe(recipe)}>
+                        <Text style={styles.logButtonText}>Log 📝</Text>
+                      </Pressable>
+                    )}
+                    <Text style={styles.chevron}>›</Text>
+                  </View>
+                )}
               </Pressable>
             </View>
           ))}
@@ -163,6 +164,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: 10,
   },
+  deleteCirclePressed: {
+    backgroundColor: '#CC2F28',
+    transform: [{ scale: 0.95 }],
+  },
   deleteCircleText: {
     color: '#fff',
     fontSize: 20,
@@ -194,6 +199,22 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Palette.gray,
     marginTop: 4,
+  },
+  recipeActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  logButton: {
+    backgroundColor: Palette.primary,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  logButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
   },
   chevron: {
     fontSize: 24,

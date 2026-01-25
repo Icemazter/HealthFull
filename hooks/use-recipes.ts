@@ -48,10 +48,13 @@ export function useRecipes() {
 
   const deleteRecipe = useCallback(
     async (recipeId: string) => {
-      const updated = recipes.filter((r) => r.id !== recipeId);
-      await saveRecipes(updated);
+      setRecipes((currentRecipes) => {
+        const updated = currentRecipes.filter((r) => r.id !== recipeId);
+        storage.set(STORAGE_KEYS.RECIPES, updated);
+        return updated;
+      });
     },
-    [recipes, saveRecipes]
+    []
   );
 
   const updateRecipe = useCallback(

@@ -1,3 +1,4 @@
+import { ManualEntryModal } from '@/components/scan/ManualEntryModal';
 import { useAppTheme } from '@/hooks/use-theme';
 import { feedback } from '@/utils/feedback';
 import { storage, STORAGE_KEYS } from '@/utils/storage';
@@ -47,6 +48,7 @@ export default function ScanScreen() {
   const webScannerControlsRef = useRef<any>(null);
   const [webScannerActive, setWebScannerActive] = useState(false);
   const [isWeb] = useState(Platform.OS === 'web');
+  const [showManualEntry, setShowManualEntry] = useState(false);
 
   const panResponder = React.useRef(
     PanResponder.create({
@@ -524,16 +526,23 @@ export default function ScanScreen() {
             
             {loading && <Text style={styles.loadingText}>Looking up product data</Text>}
             
-            <Pressable
-              style={[styles.cancelButton, { marginHorizontal: 20 }]}
-              onPress={() => {
-                if (!isWeb) {
-                  Haptics.selectionAsync();
-                }
-                router.back();
-              }}>
-              <Text style={styles.cancelText}>✕ Cancel</Text>
-            </Pressable>
+            <View style={{ flexDirection: 'row', gap: 10, marginHorizontal: 20, marginBottom: 10 }}>
+              <Pressable
+                style={[styles.cancelButton, { flex: 1 }]}
+                onPress={() => {
+                  if (!isWeb) {
+                    Haptics.selectionAsync();
+                  }
+                  router.back();
+                }}>
+                <Text style={styles.cancelText}>✕ Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.footerButton, styles.footerPrimaryButton, { flex: 1 }]}
+                onPress={() => setShowManualEntry(true)}>
+                <Text style={styles.footerButtonText}>✏️ Manual</Text>
+              </Pressable>
+            </View>
           </View>
         </>
       )}
@@ -731,6 +740,31 @@ export default function ScanScreen() {
           </View>
         </Pressable>
       </Modal>
+
+      <ManualEntryModal
+        visible={showManualEntry}
+        onCancel={() => setShowManualEntry(false)}
+        onAdd={async (entry) => {
+          setShowManualEntry(false);
+          const newEntry = {
+            id: `food_${Date.now()}`,
+            name: entry.name,
+            calories: entry.calories,
+            protein: entry.protein,
+            carbs: entry.carbs,
+            fat: entry.fat,
+            fiber: entry.fiber,
+            timestamp: Date.now(),
+            mealType: mealType,
+          };
+          
+          const entries = (await storage.get(STORAGE_KEYS.FOOD_ENTRIES, [])) || [];
+          await storage.set(STORAGE_KEYS.FOOD_ENTRIES, [...entries, newEntry]);
+          
+          await feedback.success('Food added to today\'s meals');
+          router.back();
+        }}
+      />
     </View>
   );
 }
