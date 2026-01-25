@@ -2,15 +2,13 @@ import { Palette } from '@/constants/theme';
 import { Recipe } from '@/utils/recipes';
 import React, { useState } from 'react';
 import {
-    Keyboard,
     Modal,
     Pressable,
     ScrollView,
     StyleSheet,
     Text,
     TextInput,
-    TouchableWithoutFeedback,
-    View,
+    View
 } from 'react-native';
 
 interface RecipeBuilderProps {
@@ -52,27 +50,27 @@ export const RecipeBuilder = React.memo(function RecipeBuilder({
 
   return (
     <Modal visible={visible} animationType="slide" transparent={false}>
-      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-        <View style={styles.container}>
-          <View style={styles.header}>
-            <Pressable onPress={onCancel}>
-              <Text style={styles.cancelButton}>✕</Text>
-            </Pressable>
-            <Text style={styles.headerTitle}>Build Recipe</Text>
-            <Pressable style={styles.saveButton} onPress={handleSave}>
-              <Text style={styles.saveButtonText}>Save</Text>
-            </Pressable>
-          </View>
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <Pressable onPress={onCancel}>
+            <Text style={styles.cancelButton}>✕</Text>
+          </Pressable>
+          <Text style={styles.headerTitle}>Build Recipe</Text>
+          <Pressable style={styles.saveButton} onPress={handleSave}>
+            <Text style={styles.saveButtonText}>Save</Text>
+          </Pressable>
+        </View>
 
-          <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-            <Text style={styles.label}>Recipe Name</Text>
-            <TextInput
-              style={styles.input}
-              value={recipeName}
-              onChangeText={setRecipeName}
-              placeholder="e.g., Meal Prep Chicken Bowl"
-              placeholderTextColor={Palette.gray}
-            />
+        <ScrollView style={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+          <Text style={styles.label}>Recipe Name</Text>
+          <TextInput
+            style={styles.input}
+            value={recipeName}
+            onChangeText={setRecipeName}
+            placeholder="e.g., Meal Prep Chicken Bowl"
+            placeholderTextColor={Palette.gray}
+            autoCapitalize="words"
+          />
 
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
@@ -131,7 +129,6 @@ export const RecipeBuilder = React.memo(function RecipeBuilder({
             )}
           </ScrollView>
         </View>
-      </TouchableWithoutFeedback>
     </Modal>
   );
 });
