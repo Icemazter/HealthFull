@@ -35,7 +35,7 @@ export const useHevyWorkouts = () => {
   useEffect(() => {
     const initializeHevy = async () => {
       try {
-        const apiKey = await storage.get<string>(STORAGE_KEYS.HEVY_API_KEY, null);
+        const apiKey = await storage.get<string | null>(STORAGE_KEYS.HEVY_API_KEY, null);
         
         if (apiKey) {
           hevyService.setApiKey(apiKey);
@@ -46,7 +46,9 @@ export const useHevyWorkouts = () => {
             HEVY_WORKOUTS_KEY,
             []
           );
-          setWorkouts(cachedWorkouts);
+          if (cachedWorkouts) {
+            setWorkouts(cachedWorkouts);
+          }
           
           // Sync on app launch
           await syncWorkouts();
@@ -65,9 +67,9 @@ export const useHevyWorkouts = () => {
     if (!apiKeySet) return;
 
     // Set up hourly sync
-    syncIntervalRef.current = setInterval(async () => {
-      await syncWorkouts();
-    }, SYNC_INTERVAL);
+    syncIntervalRef.current = setInterval(() => {
+      syncWorkouts();
+    }, SYNC_INTERVAL) as unknown as NodeJS.Timeout;
 
     // Listen for app state changes
     const subscription = AppState.addEventListener('change', handleAppStateChange);
@@ -96,11 +98,11 @@ export const useHevyWorkouts = () => {
       setIsLoading(true);
       setError(null);
 
-      const lastSync = await storage.get<number>(HEVY_LAST_SYNC_KEY, 0);
+      const lastSync = await storage.get<number | null>(HEVY_LAST_SYNC_KEY, null);
       
       let hevyWorkouts: HevyWorkout[];
       
-      if (lastSync > 0) {
+      if (lastSync && lastSync > 0) {
         // Only fetch new workouts since last sync
         hevyWorkouts = await hevyService.getWorkoutsSince(lastSync);
       } else {
@@ -135,8 +137,11 @@ export const useHevyWorkouts = () => {
       });
 
       // Save to storage
-      const allWorkouts = [...workouts, ...converted];
-      await storage.set(HEVY_WORKOUTS_KEY, allWorkouts);
+      setWorkouts((prev) => {
+        const allWorkouts = [...prev, ...converted];
+        storage.set(HEVY_WORKOUTS_KEY, allWorkouts);
+        return allWorkouts;
+      });
       await storage.set(HEVY_LAST_SYNC_KEY, Date.now());
     } catch (err) {
       console.error('Failed to sync Hevy workouts:', err);
@@ -173,9 +178,7 @@ export const useHevyWorkouts = () => {
   }, [syncWorkouts]);
 
   const clearApiKey = useCallback(async () => {
-    await storage.delete(STORAGE_KEYS.HEVY_API_KEY);
-    await storage.delete(HEVY_WORKOUTS_KEY);
-    await storage.delete(HEVY_LAST_SYNC_KEY);
+    await storage.multiRemove([STORAGE_KEYS.HEVY_API_KEY, HEVY_WORKOUTS_KEY, HEVY_LAST_SYNC_KEY]);
     hevyService.setApiKey('');
     setWorkouts([]);
     setApiKeySet(false);

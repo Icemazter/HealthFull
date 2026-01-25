@@ -1,8 +1,8 @@
 import { IngredientSelector, RecipeBuilder, RecipeLogger, RecipesList } from '@/components/recipes';
 import { ManualEntryModal } from '@/components/scan/ManualEntryModal';
-import { EditEntryModal } from '@/components/ui/edit-entry-modal';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { EditEntryModal } from '@/components/ui/edit-entry-modal';
 import { FoodEntryCard } from '@/components/ui/food-entry-card';
 import { Palette } from '@/constants/theme';
 import { FoodEntry, useFoodManager } from '@/hooks/use-food-manager';

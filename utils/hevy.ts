@@ -102,7 +102,7 @@ class HevyService {
       await this.request('/workouts?limit=1');
       return true;
     } catch (error) {
-      this.apiKey = originalKey;
+      this.apiKey = originalKey || null;
       return false;
     }
   }
