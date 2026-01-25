@@ -13,6 +13,7 @@ interface NutrientData {
   protein: number;
   carbs: number;
   fat: number;
+  fiber: number;
 }
 
 interface FoodData {
@@ -23,6 +24,8 @@ interface FoodData {
   unit?: 'g' | 'ml'; // Whether nutrition is per 100g or 100ml
   bestBefore?: string; // Expiration/best before date
 }
+
+type VolumeUnit = 'g' | 'ml' | 'dl' | 'tbsp' | 'tsp';
 
 export default function ScanScreen() {
   const { isDark } = useAppTheme();
@@ -36,7 +39,7 @@ export default function ScanScreen() {
   const [servingSize, setServingSize] = useState('100');
   const [showEnlargedImage, setShowEnlargedImage] = useState(false);
   const [panY] = useState(new Animated.Value(0));
-  const [unitType, setUnitType] = useState<'g' | 'ml' | 'dl'>('g'); // g=grams, ml=milliliters, dl=deciliters
+  const [unitType, setUnitType] = useState<VolumeUnit>('g'); // allow kitchen-friendly units
   const [mealType, setMealType] = useState<'Breakfast' | 'Lunch' | 'Dinner' | 'Snack'>('Breakfast');
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const webScannerRef = useRef<any>(null);
@@ -109,21 +112,24 @@ export default function ScanScreen() {
   );
 
   // Convert units for baking/powders
-  const convertServingSize = (value: string, from: string, to: string): string => {
+  const convertServingSize = (value: string, from: VolumeUnit, to: VolumeUnit): string => {
     const num = parseFloat(value);
     if (isNaN(num)) return value;
 
-    // Approximate conversions for common baking products
-    const conversions: Record<string, Record<string, number>> = {
-      g: { ml: 1.0, dl: 0.1 },    // 1g ≈ 1ml, 1g = 0.1dl (rough)
-      ml: { g: 1.0, dl: 0.1 },
-      dl: { g: 10, ml: 100 },
+    // Approximate conversions for common kitchen units
+    const unitToGram: Record<VolumeUnit, number> = {
+      g: 1,
+      ml: 1,    // assume water-like density for quick logging
+      dl: 100,
+      tbsp: 15,
+      tsp: 5,
     };
 
     if (from === to) return value;
-    if (!conversions[from] || !conversions[from][to]) return value;
+    if (!unitToGram[from] || !unitToGram[to]) return value;
 
-    const converted = num * conversions[from][to];
+    const grams = num * unitToGram[from];
+    const converted = grams / unitToGram[to];
     return converted.toFixed(1);
   };
 
@@ -307,6 +313,7 @@ export default function ScanScreen() {
             protein: nutrients['proteins_100g'] || nutrients.proteins || 0,
             carbs: nutrients['carbohydrates_100g'] || nutrients.carbohydrates || 0,
             fat: nutrients['fat_100g'] || nutrients.fat || 0,
+            fiber: nutrients['fiber_100g'] || nutrients['fibers_100g'] || nutrients.fiber || nutrients.fibers || 0,
           },
           imageUrl: product.image_front_url || product.image_url,
           servingSize: product.serving_quantity || 100, // Use API serving size or default to 100
@@ -354,7 +361,7 @@ export default function ScanScreen() {
     if (!foodData) return;
 
     try {
-      const entries = await storage.get<any[]>(STORAGE_KEYS.FOOD_ENTRIES, []);
+      const entries = (await storage.get<any[]>(STORAGE_KEYS.FOOD_ENTRIES, [])) ?? [];
       
       const totalWeight = totalGrams > 0 ? totalGrams : parseFloat(customAmount) || 100;
       const multiplier = totalWeight / 100; // Convert grams to 100g units
@@ -366,6 +373,7 @@ export default function ScanScreen() {
         protein: foodData.nutrients.protein * multiplier,
         carbs: foodData.nutrients.carbs * multiplier,
         fat: foodData.nutrients.fat * multiplier,
+        fiber: foodData.nutrients.fiber * multiplier,
         timestamp: Date.now(),
         mealType: mealType,
       });
@@ -407,13 +415,15 @@ export default function ScanScreen() {
       Haptics.selectionAsync();
     }
     
-    // Convert to grams for storage
-    let amountInGrams = amount;
-    if (unitType === 'ml') {
-      amountInGrams = amount; // 1ml ≈ 1g for calorie purposes
-    } else if (unitType === 'dl') {
-      amountInGrams = amount * 100; // 1dl = 100ml ≈ 100g
-    }
+    // Convert to grams for storage using kitchen-friendly factors
+    const unitToGramFactor: Record<VolumeUnit, number> = {
+      g: 1,
+      ml: 1,
+      dl: 100,
+      tbsp: 15,
+      tsp: 5,
+    };
+    const amountInGrams = amount * (unitToGramFactor[unitType] ?? 1);
     
     saveFood(amountInGrams);
   };
@@ -448,7 +458,7 @@ export default function ScanScreen() {
             muted
           />
           <View style={styles.webOverlay}>
-            <View style={styles.scanArea}>
+            <View style={styles.scanFrame}>
               {loading && <ActivityIndicator size="large" color="#fff" style={styles.scanAreaLoader} />}
             </View>
             <Text style={styles.instruction}>
@@ -484,15 +494,30 @@ export default function ScanScreen() {
             barcodeScannerSettings={{
               barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e'],
             }}
-            barcodeScannerEnabled
             onBarcodeScanned={!scanned ? handleBarCodeScanned : undefined}
           />
-          <View style={[styles.overlay, { backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end', paddingBottom: 20 }]}> 
+          <View style={styles.overlayContainer}>
+            {/* Top dark overlay */}
+            <View style={styles.topDarkArea} />
+            
+            {/* Middle section with side darks */}
+            <View style={styles.middleSection}>
+              <View style={styles.sideDarkArea} />
+              <View style={styles.scanFrame}>
+                {loading && <ActivityIndicator size="large" color="#fff" style={styles.scanAreaLoader} />}
+              </View>
+              <View style={styles.sideDarkArea} />
+            </View>
+            
+            {/* Bottom dark overlay */}
+            <View style={styles.bottomDarkArea} />
+          </View>
+          <View style={styles.scanOverlay}>
             <Text style={[styles.instruction, { marginBottom: 20, textAlign: 'center', paddingHorizontal: 20 }]}>
               {loading ? '✓ Scanning...' : scanned ? '✓ Scanned!' : '📷 Align barcode'}
             </Text>
             
-            {loading && <ActivityIndicator size="large" color="#fff" style={{ marginBottom: 20 }} />}
+            {loading && <Text style={styles.loadingText}>Looking up product data</Text>}
             
             <Pressable
               style={[styles.cancelButton, { marginHorizontal: 20 }]}
@@ -566,7 +591,7 @@ export default function ScanScreen() {
             {foodData?.bestBefore && (
               <View style={styles.bestBeforeBox}>
                 <Text style={styles.bestBeforeLabel}>📅 Best Before</Text>
-                <Text style={styles.bestBeforeText}>{foodData.bestBefore}</Text>
+                <Text style={styles.bestBeforeValue}>{foodData.bestBefore}</Text>
               </View>
             )}
             
@@ -588,6 +613,10 @@ export default function ScanScreen() {
                   <Text style={styles.macroLabel}>Fat</Text>
                   <Text style={styles.macroValue}>{(parseFloat(foodData?.nutrients.fat?.toFixed(1) || '0'))}g</Text>
                 </View>
+                <View style={styles.macroItem}>
+                  <Text style={styles.macroLabel}>Fiber</Text>
+                  <Text style={styles.macroValue}>{(parseFloat(foodData?.nutrients.fiber?.toFixed(1) || '0'))}g</Text>
+                </View>
               </View>
             </View>
 
@@ -595,14 +624,14 @@ export default function ScanScreen() {
               <View style={styles.servingSizeLabelRow}>
                 <Text style={styles.servingSizeLabel}>⚖️ Serving Size</Text>
                 <View style={styles.unitSelector}>
-                  {['g', 'ml', 'dl'].map((unit) => (
+                  {['g', 'ml', 'dl', 'tbsp', 'tsp'].map((unit) => (
                     <Pressable
                       key={unit}
                       style={[styles.unitButton, unitType === unit && styles.unitButtonActive]}
                       onPress={() => {
-                        const converted = convertServingSize(servingSize, unitType, unit as 'g' | 'ml' | 'dl');
+                        const converted = convertServingSize(servingSize, unitType, unit as 'g' | 'ml' | 'dl' | 'tbsp' | 'tsp');
                         setServingSize(converted);
-                        setUnitType(unit as 'g' | 'ml' | 'dl');
+                        setUnitType(unit as 'g' | 'ml' | 'dl' | 'tbsp' | 'tsp');
                       }}>
                       <Text style={[styles.unitButtonText, unitType === unit && styles.unitButtonTextActive]}>
                         {unit}
@@ -737,15 +766,72 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  scanArea: {
-    width: 250,
-    height: 150,
-    borderWidth: 3,
-    borderColor: Palette.yellow,
-    borderRadius: 12,
-    marginBottom: 20,
+  darkOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.8)',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  overlayContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  topDarkArea: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: '15%',
+    backgroundColor: 'rgba(0,0,0,0.8)',
+  },
+  bottomDarkArea: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: '15%',
+    backgroundColor: 'rgba(0,0,0,0.8)',
+  },
+  middleSection: {
+    position: 'absolute',
+    top: '15%',
+    left: 0,
+    right: 0,
+    height: '70%',
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  sideDarkArea: {
+    flex: 1,
+    height: '100%',
+    backgroundColor: 'rgba(0,0,0,0.8)',
+  },
+  scanFrame: {
+    width: '80%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'transparent',
+  },
+  scanOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    paddingBottom: 40,
+    pointerEvents: 'box-none',
   },
   scanAreaLoader: {
     marginBottom: 0,
@@ -943,7 +1029,7 @@ const styles = StyleSheet.create({
     color: '#ff9800',
     marginBottom: 4,
   },
-  bestBeforeText: {
+  bestBeforeValue: {
     fontSize: 16,
     fontWeight: 'bold',
     color: '#d97706',
