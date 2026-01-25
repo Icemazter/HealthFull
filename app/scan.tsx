@@ -41,6 +41,14 @@ export default function ScanScreen() {
   const [servingSize, setServingSize] = useState('100');
   const [showEnlargedImage, setShowEnlargedImage] = useState(false);
   const [panY] = useState(new Animated.Value(0));
+  const [mealScales] = useState({
+    Breakfast: new Animated.Value(1),
+    Lunch: new Animated.Value(1),
+    Dinner: new Animated.Value(1),
+    Snack: new Animated.Value(1),
+  });
+  const [celebrationScale] = useState(new Animated.Value(1));
+  const [imageScale] = useState(new Animated.Value(1));
   const [unitType, setUnitType] = useState<VolumeUnit>('g'); // allow kitchen-friendly units
   const [mealType, setMealType] = useState<'Breakfast' | 'Lunch' | 'Dinner' | 'Snack'>('Breakfast');
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -139,6 +147,70 @@ export default function ScanScreen() {
     const grams = num * unitToGram[from];
     const converted = grams / unitToGram[to];
     return converted.toFixed(1);
+  };
+
+  const animateMealChip = (meal: 'Breakfast' | 'Lunch' | 'Dinner' | 'Snack') => {
+    if (!isWeb) {
+      Haptics.selectionAsync();
+    }
+    
+    // Spring scale animation
+    Animated.sequence([
+      Animated.spring(mealScales[meal], {
+        toValue: 0.92,
+        useNativeDriver: true,
+        speed: 20,
+      }),
+      Animated.spring(mealScales[meal], {
+        toValue: 1,
+        useNativeDriver: true,
+        speed: 15,
+      }),
+    ]).start();
+    
+    setMealType(meal);
+  };
+
+  const celebrateSuccess = () => {
+    if (!isWeb) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+
+    // Celebration pulse animation
+    Animated.sequence([
+      Animated.spring(celebrationScale, {
+        toValue: 1.08,
+        useNativeDriver: true,
+        speed: 20,
+      }),
+      Animated.spring(celebrationScale, {
+        toValue: 1,
+        useNativeDriver: true,
+        speed: 12,
+      }),
+    ]).start();
+  };
+
+  const animateImageTap = () => {
+    if (!isWeb) {
+      Haptics.selectionAsync();
+    }
+
+    // Image scale animation on tap
+    Animated.sequence([
+      Animated.spring(imageScale, {
+        toValue: 0.95,
+        useNativeDriver: true,
+        speed: 25,
+      }),
+      Animated.spring(imageScale, {
+        toValue: 1,
+        useNativeDriver: true,
+        speed: 20,
+      }),
+    ]).start();
+
+    setShowEnlargedImage(true);
   };
 
   const initWebCamera = async () => {
@@ -492,10 +564,10 @@ export default function ScanScreen() {
             <View style={styles.scanFrame}>
               {loading && <ActivityIndicator size="large" color="#fff" style={styles.scanAreaLoader} />}
             </View>
-            <Text style={styles.instruction}>
-              {loading ? '✓ Scanning...' : scanned ? '✓ Scanned!' : ''}
+            <Text style={[styles.instruction, { fontSize: 22, marginBottom: 12 }]}>
+              {loading ? 'Looking it up...' : scanned ? 'Got it! Let\'s customize' : 'Point at barcode'}
             </Text>
-            {loading && <Text style={styles.loadingText}>Looking up product data</Text>}
+            {loading && <Text style={[styles.loadingText, { fontSize: 14 }]}>Finding nutrition info...</Text>}
             {!webScannerActive && !loading && (
               <Pressable
                 style={[styles.footerButton, styles.footerPrimaryButton, { marginTop: 8, marginBottom: 4 }]}
@@ -544,11 +616,11 @@ export default function ScanScreen() {
             <View style={styles.bottomDarkArea} />
           </View>
           <View style={styles.scanOverlay}>
-            <Text style={[styles.instruction, { marginBottom: 20, textAlign: 'center', paddingHorizontal: 20 }]}>
-              {loading ? '✓ Scanning...' : scanned ? '✓ Scanned!' : ''}
+            <Text style={[styles.instruction, { marginBottom: 20, textAlign: 'center', paddingHorizontal: 20, fontSize: 22 }]}>
+              {loading ? 'Looking it up...' : scanned ? 'Got it! Let\'s customize' : 'Point at barcode'}
             </Text>
             
-            {loading && <Text style={styles.loadingText}>Looking up product data</Text>}
+            {loading && <Text style={[styles.loadingText, { fontSize: 14 }]}>Finding nutrition info...</Text>}
             
             <View style={{ flexDirection: 'row', gap: 10, marginHorizontal: 20, marginBottom: 10 }}>
               <Pressable
@@ -605,44 +677,54 @@ export default function ScanScreen() {
                 <Text style={styles.closeButtonText}>✕</Text>
               </Pressable>
               <View style={styles.headerContent}>
-                <Text style={styles.modalTitle}>✓ Product Found</Text>
+                <Text style={styles.modalTitle}>🎉 Product Found</Text>
                 <Text style={styles.productName}>{foodData?.name}</Text>
+                {foodData && foodData.nutrients.protein > 15 && (
+                  <View style={styles.achievementBadge}>
+                    <Text style={styles.achievementBadgeText}>💪 High Protein</Text>
+                  </View>
+                )}
               </View>
             </View>
             
             {foodData?.imageUrl && (
-              <Pressable 
-                style={styles.imageContainer}
-                onPress={() => setShowEnlargedImage(true)}>
-                <Image 
-                  source={{ uri: foodData.imageUrl }} 
-                  style={styles.productImage}
-                  resizeMode="cover"
-                />
-                <Text style={styles.tapToEnlarge}>Tap to enlarge</Text>
-              </Pressable>
+              <Animated.View style={[{ transform: [{ scale: imageScale }] }]}>
+                <Pressable 
+                  style={styles.imageContainer}
+                  onPress={animateImageTap}>
+                  <Image 
+                    source={{ uri: foodData.imageUrl }} 
+                    style={styles.productImage}
+                    resizeMode="cover"
+                  />
+                  <View style={styles.imagePinIcon}>
+                    <Text style={styles.imagePinText}>📌</Text>
+                  </View>
+                  <Text style={styles.tapToEnlarge}>Tap to enlarge</Text>
+                </Pressable>
+              </Animated.View>
             )}
             
             <View style={styles.nutritionBox}>
-              <Text style={styles.nutritionTitle}>📊 Nutrition (per 100{foodData?.unit === 'ml' ? 'ml' : 'g'})</Text>
+              <Text style={styles.nutritionTitle}>📊 Nutrition per 100{foodData?.unit === 'ml' ? 'ml' : 'g'}</Text>
               <Text style={styles.nutritionCalories}>
                 {Math.round(foodData?.nutrients.calories || 0)} kcal
               </Text>
               <View style={styles.macrosGrid}>
                 <View style={styles.macroItem}>
-                  <Text style={styles.macroLabel}>Protein</Text>
+                  <Text style={styles.macroLabel}>PROTEIN</Text>
                   <Text style={styles.macroValue}>{(parseFloat(foodData?.nutrients.protein?.toFixed(1) || '0'))}g</Text>
                 </View>
                 <View style={styles.macroItem}>
-                  <Text style={styles.macroLabel}>Carbs</Text>
+                  <Text style={styles.macroLabel}>CARBS</Text>
                   <Text style={styles.macroValue}>{(parseFloat(foodData?.nutrients.carbs?.toFixed(1) || '0'))}g</Text>
                 </View>
                 <View style={styles.macroItem}>
-                  <Text style={styles.macroLabel}>Fat</Text>
+                  <Text style={styles.macroLabel}>FAT</Text>
                   <Text style={styles.macroValue}>{(parseFloat(foodData?.nutrients.fat?.toFixed(1) || '0'))}g</Text>
                 </View>
                 <View style={styles.macroItem}>
-                  <Text style={styles.macroLabel}>Fiber</Text>
+                  <Text style={styles.macroLabel}>FIBER</Text>
                   <Text style={styles.macroValue}>{(parseFloat(foodData?.nutrients.fiber?.toFixed(1) || '0'))}g</Text>
                 </View>
               </View>
@@ -676,10 +758,10 @@ export default function ScanScreen() {
                   keyboardType="decimal-pad"
                   placeholder="100"
                 />
-                <Text style={styles.servingSizeUnit}>{unitType}/item</Text>
+                <Text style={styles.servingSizeUnit}>{unitType}</Text>
               </View>
               <Text style={styles.servingSizeHint}>
-                Each item weighs {servingSize || 100}{unitType}
+                Each item: {servingSize || 100}{unitType}
               </Text>
             </View>
 
@@ -687,14 +769,20 @@ export default function ScanScreen() {
               <Text style={styles.quantityLabel}>🍽️ Meal</Text>
               <View style={styles.mealChips}>
                 {(['Breakfast', 'Lunch', 'Dinner', 'Snack'] as const).map((meal) => (
-                  <Pressable
+                  <Animated.View
                     key={meal}
-                    style={[styles.mealChip, mealType === meal && styles.mealChipActive]}
-                    onPress={() => setMealType(meal)}>
-                    <Text style={[styles.mealChipText, mealType === meal && styles.mealChipTextActive]}>
-                      {meal}
-                    </Text>
-                  </Pressable>
+                    style={[
+                      styles.mealChip,
+                      mealType === meal && styles.mealChipActive,
+                      { transform: [{ scale: mealScales[meal] }] }
+                    ]}>
+                    <Pressable
+                      onPress={() => animateMealChip(meal)}>
+                      <Text style={[styles.mealChipText, mealType === meal && styles.mealChipTextActive]}>
+                        {meal}
+                      </Text>
+                    </Pressable>
+                  </Animated.View>
                 ))}
               </View>
             </View>
@@ -716,11 +804,18 @@ export default function ScanScreen() {
               </Text>
             </View>
 
-            <Pressable style={styles.optionButton} onPress={handleCustomAmount}>
-              <Text style={styles.optionButtonText}>
-                ✓ Add {customAmount || '100'}{unitType}
-              </Text>
-            </Pressable>
+            <Animated.View style={[{ transform: [{ scale: celebrationScale }] }]}>
+              <Pressable 
+                style={styles.optionButton} 
+                onPress={() => {
+                  celebrateSuccess();
+                  handleCustomAmount();
+                }}>
+                <Text style={styles.optionButtonText}>
+                  ✓ Add {customAmount || '100'}{unitType}
+                </Text>
+              </Pressable>
+            </Animated.View>
 
             <Pressable style={styles.cancelOptionButton} onPress={handleCancel}>
               <Text style={styles.cancelOptionText}>✗ Put Back on Shelf</Text>
