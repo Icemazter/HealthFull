@@ -138,6 +138,17 @@ export default function HomeScreen() {
     [currentRecipe]
   );
 
+  const handleDeleteRecipe = useCallback(
+    async (recipeId: string) => {
+      await deleteRecipe(recipeId);
+      if (currentRecipe?.id === recipeId) {
+        setCurrentRecipe(null);
+        setShowRecipeBuilder(false);
+      }
+    },
+    [deleteRecipe, currentRecipe]
+  );
+
   const handleRemoveEntry = useCallback((id: string) => {
     feedback.confirm(
       'Remove Entry',
@@ -257,7 +268,7 @@ export default function HomeScreen() {
       <RecipesList
         recipes={recipes}
         onSelectRecipe={handleSelectRecipe}
-        onDeleteRecipe={deleteRecipe}
+        onDeleteRecipe={handleDeleteRecipe}
         onCreateNew={handleCreateRecipe}
       />
 
