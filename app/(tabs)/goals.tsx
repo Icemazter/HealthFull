@@ -312,11 +312,11 @@ export default function GoalsScreen() {
       </View>
 
       {/* Body Stats & Recommendation */}
-      <View style={styles.card}>
+      <View style={[styles.card, isDark && styles.cardDark]}>
         <View style={styles.bodyHeaderRow}>
-          <Text style={styles.cardTitle}>📏 Body Stats</Text>
-          <Pressable style={styles.toggleButton} onPress={() => setShowBodyStats(!showBodyStats)}>
-            <Text style={styles.toggleButtonText}>{showBodyStats ? 'Hide' : 'Show'}</Text>
+          <Text style={[styles.cardTitle, isDark && styles.textDark]}>📏 Body Stats</Text>
+          <Pressable style={[styles.toggleButton, isDark && styles.toggleButtonDark]} onPress={() => setShowBodyStats(!showBodyStats)}>
+            <Text style={[styles.toggleButtonText, isDark && styles.toggleButtonTextDark]}>{showBodyStats ? 'Hide' : 'Show'}</Text>
           </Pressable>
         </View>
 
