@@ -11,6 +11,7 @@ interface MealSectionProps {
   isFavorite: (item: FoodEntry) => boolean;
   onRemove: (id: string) => void;
   onToggleFavorite: (item: FoodEntry) => void;
+  onEdit?: (item: FoodEntry) => void;
 }
 
 export const MealSection = React.memo(
@@ -22,6 +23,7 @@ export const MealSection = React.memo(
     isFavorite,
     onRemove,
     onToggleFavorite,
+    onEdit,
   }: MealSectionProps) => {
     return (
       <View style={styles.mealSection}>
@@ -42,6 +44,7 @@ export const MealSection = React.memo(
             isFavorite={isFavorite(item)}
             onRemove={onRemove}
             onToggleFavorite={onToggleFavorite}
+            onEdit={onEdit}
           />
         ))}
       </View>

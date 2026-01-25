@@ -1,4 +1,5 @@
 import { Palette } from '@/constants/theme';
+import { FoodEntry } from '@/hooks/use-food-manager';
 import React, { useState } from 'react';
 import {
     Modal,
@@ -11,39 +12,49 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-interface ManualEntryModalProps {
+interface EditEntryModalProps {
   visible: boolean;
-  onAdd: (entry: {
-    name: string;
-    calories: number;
-    protein: number;
-    carbs: number;
-    fat: number;
-    fiber: number;
-    mealType: 'Breakfast' | 'Lunch' | 'Dinner' | 'Snack';
-  }) => void;
+  entry: FoodEntry | null;
+  onSave: (updatedEntry: FoodEntry) => void;
   onCancel: () => void;
 }
 
-export const ManualEntryModal = React.memo(function ManualEntryModal({
+export const EditEntryModal = React.memo(function EditEntryModal({
   visible,
-  onAdd,
+  entry,
+  onSave,
   onCancel,
-}: ManualEntryModalProps) {
+}: EditEntryModalProps) {
   const insets = useSafeAreaInsets();
-  const [name, setName] = useState('');
-  const [calories, setCalories] = useState('');
-  const [protein, setProtein] = useState('');
-  const [carbs, setCarbs] = useState('');
-  const [fat, setFat] = useState('');
-  const [fiber, setFiber] = useState('0');
-  const [mealType, setMealType] = useState<'Breakfast' | 'Lunch' | 'Dinner' | 'Snack'>('Lunch');
+  const [name, setName] = useState(entry?.name || '');
+  const [calories, setCalories] = useState((entry?.calories || 0).toString());
+  const [protein, setProtein] = useState((entry?.protein || 0).toString());
+  const [carbs, setCarbs] = useState((entry?.carbs || 0).toString());
+  const [fat, setFat] = useState((entry?.fat || 0).toString());
+  const [fiber, setFiber] = useState((entry?.fiber || 0).toString());
+  const [mealType, setMealType] = useState<'Breakfast' | 'Lunch' | 'Dinner' | 'Snack'>(
+    (entry?.mealType as 'Breakfast' | 'Lunch' | 'Dinner' | 'Snack') || 'Lunch'
+  );
 
-  const handleAdd = () => {
+  React.useEffect(() => {
+    if (entry) {
+      setName(entry.name);
+      setCalories(entry.calories.toString());
+      setProtein(entry.protein.toString());
+      setCarbs(entry.carbs.toString());
+      setFat(entry.fat.toString());
+      setFiber((entry.fiber || 0).toString());
+      setMealType((entry.mealType as 'Breakfast' | 'Lunch' | 'Dinner' | 'Snack') || 'Lunch');
+    }
+  }, [entry]);
+
+  const handleSave = () => {
     if (!name.trim()) {
       alert('Please enter a food name');
       return;
     }
+
+    if (!entry) return;
 
     const cals = parseFloat(calories) || 0;
     const prot = parseFloat(protein) || 0;
@@ -51,7 +62,8 @@ export const ManualEntryModal = React.memo(function ManualEntryModal({
     const ft = parseFloat(fat) || 0;
     const fb = parseFloat(fiber) || 0;
 
-    onAdd({
+    const updatedEntry: FoodEntry = {
+      ...entry,
       name: name.trim(),
       calories: cals,
       protein: prot,
@@ -59,15 +71,9 @@ export const ManualEntryModal = React.memo(function ManualEntryModal({
       fat: ft,
       fiber: fb,
       mealType: mealType,
-    });
+    };
 
-    // Reset form
-    setName('');
-    setCalories('');
-    setProtein('');
-    setCarbs('');
-    setFat('');
-    setFiber('0');
+    onSave(updatedEntry);
   };
 
   return (
@@ -77,9 +83,9 @@ export const ManualEntryModal = React.memo(function ManualEntryModal({
           <Pressable onPress={onCancel} hitSlop={10}>
             <Text style={styles.cancelButton}>✕</Text>
           </Pressable>
-          <Text style={styles.headerTitle}>Manual Entry</Text>
-          <Pressable style={styles.addButton} onPress={handleAdd} hitSlop={10}>
-            <Text style={styles.addButtonText}>Add</Text>
+          <Text style={styles.headerTitle}>Edit Entry</Text>
+          <Pressable style={styles.saveButton} onPress={handleSave} hitSlop={10}>
+            <Text style={styles.saveButtonText}>Save</Text>
           </Pressable>
         </View>
 
@@ -92,7 +98,6 @@ export const ManualEntryModal = React.memo(function ManualEntryModal({
               onChangeText={setName}
               placeholder="e.g., Chicken Breast"
               placeholderTextColor={Palette.gray}
-              autoCapitalize="words"
             />
           </View>
 
@@ -106,7 +111,9 @@ export const ManualEntryModal = React.memo(function ManualEntryModal({
                     styles.mealTypeButton,
                     mealType === meal && styles.mealTypeButtonActive
                   ]}
-                  onPress={() => setMealType(meal)}>
+                  onPress={() => setMealType(meal)}
+                  hitSlop={8}
+                >
                   <Text style={[
                     styles.mealTypeButtonText,
                     mealType === meal && styles.mealTypeButtonTextActive
@@ -119,7 +126,7 @@ export const ManualEntryModal = React.memo(function ManualEntryModal({
           </View>
 
           <View style={styles.section}>
-            <Text style={styles.label}>Per 100g Nutrition Facts</Text>
+            <Text style={styles.label}>Nutrition Facts</Text>
 
             <View style={styles.row}>
               <View style={styles.col}>
@@ -183,13 +190,8 @@ export const ManualEntryModal = React.memo(function ManualEntryModal({
                   placeholderTextColor={Palette.gray}
                 />
               </View>
+              <View style={styles.col} />
             </View>
-          </View>
-
-          <View style={styles.note}>
-            <Text style={styles.noteText}>
-              💡 Enter nutrition values per 100g. This will be used as a baseline for all portions.
-            </Text>
           </View>
         </ScrollView>
       </View>
@@ -201,14 +203,13 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#fff',
-    paddingTop: 12,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingBottom: 16,
+    paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: Palette.lightGray2,
   },
@@ -221,13 +222,13 @@ const styles = StyleSheet.create({
     fontSize: 24,
     color: Palette.gray,
   },
-  addButton: {
+  saveButton: {
     backgroundColor: Palette.primary,
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 6,
   },
-  addButtonText: {
+  saveButtonText: {
     color: '#fff',
     fontSize: 14,
     fontWeight: '600',
@@ -246,43 +247,17 @@ const styles = StyleSheet.create({
     color: Palette.darkGray,
     marginBottom: 8,
   },
-  mealTypeRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  mealTypeButton: {
-    flex: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: Palette.lightGray2,
-    alignItems: 'center',
-  },
-  mealTypeButtonActive: {
-    backgroundColor: Palette.primary,
-    borderColor: Palette.primary,
-  },
-  mealTypeButtonText: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: Palette.darkGray,
-  },
-  mealTypeButtonTextActive: {
-    color: '#fff',
-  },
   input: {
     backgroundColor: Palette.lightGray2,
     borderRadius: 8,
     paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingVertical: 12,
     fontSize: 16,
     color: Palette.darkGray,
   },
   row: {
     flexDirection: 'row',
     gap: 12,
-    marginBottom: 12,
   },
   col: {
     flex: 1,
@@ -292,18 +267,31 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    fontSize: 14,
+    fontSize: 16,
     color: Palette.darkGray,
   },
-  note: {
-    backgroundColor: 'rgba(0,0,0,0.05)',
-    borderRadius: 8,
-    padding: 12,
-    marginTop: 16,
+  mealTypeRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 8,
   },
-  noteText: {
-    fontSize: 12,
-    color: Palette.gray,
-    lineHeight: 16,
+  mealTypeButton: {
+    flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    backgroundColor: Palette.lightGray2,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  mealTypeButtonActive: {
+    backgroundColor: Palette.primary,
+  },
+  mealTypeButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Palette.darkGray,
+  },
+  mealTypeButtonTextActive: {
+    color: '#fff',
   },
 });

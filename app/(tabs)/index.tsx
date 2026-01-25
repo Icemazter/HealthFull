@@ -1,5 +1,6 @@
 import { IngredientSelector, RecipeBuilder, RecipeLogger, RecipesList } from '@/components/recipes';
 import { ManualEntryModal } from '@/components/scan/ManualEntryModal';
+import { EditEntryModal } from '@/components/ui/edit-entry-modal';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { FoodEntryCard } from '@/components/ui/food-entry-card';
@@ -38,6 +39,8 @@ export default function HomeScreen() {
   const [showRecipeLogger, setShowRecipeLogger] = useState(false);
   const [selectedRecipeForLogging, setSelectedRecipeForLogging] = useState<Recipe | null>(null);
   const [showManualEntry, setShowManualEntry] = useState(false);
+  const [showEditEntry, setShowEditEntry] = useState(false);
+  const [editingEntry, setEditingEntry] = useState<FoodEntry | null>(null);
   const insets = useSafeAreaInsets();
 
   const [refreshKey, setRefreshKey] = useState(0);
@@ -169,8 +172,23 @@ export default function HomeScreen() {
     foodManager.toggleFavorite(item);
   }, [foodManager]);
 
+  const handleEditEntry = useCallback((item: FoodEntry) => {
+    setEditingEntry(item);
+    setShowEditEntry(true);
+  }, []);
+
+  const handleSaveEditedEntry = useCallback(async (updatedEntry: FoodEntry) => {
+    // Remove old entry and add updated one
+    foodManager.removeEntry(updatedEntry.id);
+    await foodManager.addEntry(updatedEntry);
+    setShowEditEntry(false);
+    setEditingEntry(null);
+    setRefreshKey(k => k + 1);
+    await feedback.success('Entry updated!');
+  }, [foodManager]);
+
   const handleLogRecipe = useCallback(
-    async (scaledNutrition: { calories: number; protein: number; carbs: number; fat: number; fiber: number }) => {
+    async (scaledNutrition: { calories: number; protein: number; carbs: number; fat: number; fiber: number; mealType: 'Breakfast' | 'Lunch' | 'Dinner' | 'Snack' }) => {
       if (!selectedRecipeForLogging) return;
       
       const recipeName = selectedRecipeForLogging.name;
@@ -183,7 +201,7 @@ export default function HomeScreen() {
         fat: scaledNutrition.fat,
         fiber: scaledNutrition.fiber,
         timestamp: Date.now(),
-        mealType: 'Lunch',
+        mealType: scaledNutrition.mealType,
       };
       
       await foodManager.addEntry(entry);
@@ -337,6 +355,7 @@ export default function HomeScreen() {
                   isFavorite={foodManager.isFavorite(item)}
                   onRemove={handleRemoveEntry}
                   onToggleFavorite={handleToggleFavorite}
+                  onEdit={handleEditEntry}
                 />
               ))}
             </View>
@@ -397,7 +416,7 @@ export default function HomeScreen() {
             fat: entry.fat,
             fiber: entry.fiber,
             timestamp: Date.now(),
-            mealType: 'Lunch',
+            mealType: entry.mealType,
           };
           
           await foodManager.addEntry(newEntry);
@@ -406,12 +425,19 @@ export default function HomeScreen() {
           await feedback.success(`${entry.name} added!`);
         }}
       />
+      <EditEntryModal
+        visible={showEditEntry}
+        entry={editingEntry}
+        onCancel={() => {
+          setShowEditEntry(false);
+          setEditingEntry(null);
+        }}
+        onSave={handleSaveEditedEntry}
+      />
     </ScrollView>
     </>
   );
 }
-
-const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Palette.white,

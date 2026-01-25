@@ -10,6 +10,7 @@ interface FoodEntryCardProps {
   isFavorite: boolean;
   onRemove: (id: string) => void;
   onToggleFavorite: (item: FoodEntry) => void;
+  onEdit?: (item: FoodEntry) => void;
 }
 
 export const FoodEntryCard = React.memo(
@@ -20,6 +21,7 @@ export const FoodEntryCard = React.memo(
     isFavorite,
     onRemove,
     onToggleFavorite,
+    onEdit,
   }: FoodEntryCardProps) => {
     return (
       <View style={[styles.entryCard, isDark && styles.entryCardDark]}>
@@ -50,14 +52,26 @@ export const FoodEntryCard = React.memo(
         <View style={styles.entryActions}>
           <Pressable
             style={[styles.favoriteButton, isDark && styles.favoriteButtonDark]}
-            onPress={() => onToggleFavorite(item)}>
+            onPress={() => onToggleFavorite(item)}
+            hitSlop={8}>
             <Text style={styles.favoriteButtonText}>
               {isFavorite ? '⭐' : '☆'}
             </Text>
           </Pressable>
+          {onEdit && (
+            <Pressable
+              style={[styles.editButton, isDark && styles.editButtonDark]}
+              onPress={() => onEdit(item)}
+              hitSlop={8}>
+              <Text style={[styles.editButtonText, isDark && styles.editButtonTextDark]}>
+                ✎
+              </Text>
+            </Pressable>
+          )}
           <Pressable
             style={[styles.removeButton, isDark && styles.removeButtonDark]}
-            onPress={() => onRemove(item.id)}>
+            onPress={() => onRemove(item.id)}
+            hitSlop={8}>
             <Text style={[styles.removeButtonText, isDark && styles.removeButtonTextDark]}>
               ✕
             </Text>
@@ -156,5 +170,24 @@ const styles = StyleSheet.create({
   },
   removeButtonTextDark: {
     color: '#fca5a5',
+  },
+  editButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#dbeafe',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  editButtonDark: {
+    backgroundColor: '#1e40af',
+  },
+  editButtonText: {
+    fontSize: 16,
+    color: '#0284c7',
+    fontWeight: '600',
+  },
+  editButtonTextDark: {
+    color: '#60a5fa',
   },
 });
