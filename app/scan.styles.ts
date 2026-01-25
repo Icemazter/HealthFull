@@ -238,12 +238,6 @@ export const scanStyles = StyleSheet.create({
     fontWeight: 'bold',
     color: Palette.brown,
   },
-  bestBeforeText: {
-    fontSize: 13,
-    color: '#d97706',
-    fontWeight: '500',
-    marginTop: 4,
-  },
   // Image styles
   imageContainer: {
     width: 120,
@@ -292,26 +286,6 @@ export const scanStyles = StyleSheet.create({
     fontSize: 14,
     marginTop: 16,
     opacity: 0.7,
-  },
-  // Best before box
-  bestBeforeBox: {
-    backgroundColor: '#fff9e6',
-    padding: 12,
-    borderRadius: 12,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#ffc107',
-  },
-  bestBeforeLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#ff9800',
-    marginBottom: 4,
-  },
-  bestBeforeValue: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#d97706',
   },
   // Nutrition box
   nutritionBox: {

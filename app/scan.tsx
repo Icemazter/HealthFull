@@ -23,7 +23,6 @@ interface FoodData {
   imageUrl?: string;
   servingSize?: number; // in grams or ml depending on unit
   unit?: 'g' | 'ml'; // Whether nutrition is per 100g or 100ml
-  bestBefore?: string; // Expiration/best before date
 }
 
 type VolumeUnit = 'g' | 'ml' | 'dl' | 'tbsp' | 'tsp';
@@ -327,7 +326,6 @@ export default function ScanScreen() {
           imageUrl: product.image_front_url || product.image_url,
           servingSize: product.serving_quantity || 100, // Use API serving size or default to 100
           unit: productUnit, // Track if nutrition is per 100g or 100ml
-          bestBefore: product.expiration_date || product.best_before_date, // Capture expiration info
         };
 
         setFoodData(food);
@@ -609,9 +607,6 @@ export default function ScanScreen() {
               <View style={styles.headerContent}>
                 <Text style={styles.modalTitle}>✓ Product Found</Text>
                 <Text style={styles.productName}>{foodData?.name}</Text>
-                {foodData?.bestBefore && (
-                  <Text style={styles.bestBeforeText}>📅 Best Before: {foodData.bestBefore}</Text>
-                )}
               </View>
             </View>
             
@@ -626,13 +621,6 @@ export default function ScanScreen() {
                 />
                 <Text style={styles.tapToEnlarge}>Tap to enlarge</Text>
               </Pressable>
-            )}
-            
-            {foodData?.bestBefore && (
-              <View style={styles.bestBeforeBox}>
-                <Text style={styles.bestBeforeLabel}>📅 Best Before</Text>
-                <Text style={styles.bestBeforeValue}>{foodData.bestBefore}</Text>
-              </View>
             )}
             
             <View style={styles.nutritionBox}>
