@@ -10,6 +10,7 @@ import {
     TextInput,
     View
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface RecipeBuilderProps {
   visible: boolean;
@@ -26,6 +27,7 @@ export const RecipeBuilder = React.memo(function RecipeBuilder({
   onCancel,
   onAddIngredientPressed,
 }: RecipeBuilderProps) {
+  const insets = useSafeAreaInsets();
   const [recipeName, setRecipeName] = useState(recipe.name);
 
   const handleSave = () => {
@@ -50,13 +52,13 @@ export const RecipeBuilder = React.memo(function RecipeBuilder({
 
   return (
     <Modal visible={visible} animationType="slide" transparent={false}>
-      <View style={styles.container}>
+      <View style={[styles.container, { paddingTop: insets.top }]}>
         <View style={styles.header}>
-          <Pressable onPress={onCancel}>
+          <Pressable onPress={onCancel} hitSlop={10}>
             <Text style={styles.cancelButton}>✕</Text>
           </Pressable>
           <Text style={styles.headerTitle}>Build Recipe</Text>
-          <Pressable style={styles.saveButton} onPress={handleSave}>
+          <Pressable style={styles.saveButton} onPress={handleSave} hitSlop={10}>
             <Text style={styles.saveButtonText}>Save</Text>
           </Pressable>
         </View>
@@ -75,7 +77,7 @@ export const RecipeBuilder = React.memo(function RecipeBuilder({
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
                 <Text style={styles.sectionTitle}>Ingredients ({recipe.ingredients.length})</Text>
-                <Pressable style={styles.addIngredientBtn} onPress={onAddIngredientPressed}>
+                <Pressable style={styles.addIngredientBtn} onPress={onAddIngredientPressed} hitSlop={8}>
                   <Text style={styles.addIngredientText}>+ Add</Text>
                 </Pressable>
               </View>

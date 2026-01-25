@@ -12,6 +12,7 @@ import {
     TextInput,
     View
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface IngredientSelectorProps {
   visible: boolean;
@@ -36,6 +37,7 @@ export const IngredientSelector = React.memo(function IngredientSelector({
   onCancel,
   onScanPressed,
 }: IngredientSelectorProps) {
+  const insets = useSafeAreaInsets();
   const [activeTab, setActiveTab] = useState<'scan' | 'manual' | 'saved'>('scan');
   const [manualName, setManualName] = useState('');
   const [manualCalories, setManualCalories] = useState('');
@@ -138,9 +140,9 @@ export const IngredientSelector = React.memo(function IngredientSelector({
 
   return (
     <Modal visible={visible} animationType="slide" transparent={false}>
-      <View style={styles.container}>
+      <View style={[styles.container, { paddingTop: insets.top }]}>
         <View style={styles.header}>
-          <Pressable onPress={onCancel}>
+          <Pressable onPress={onCancel} hitSlop={10}>
             <Text style={styles.closeButton}>✕</Text>
           </Pressable>
           <Text style={styles.headerTitle}>Add Ingredient</Text>
@@ -152,7 +154,8 @@ export const IngredientSelector = React.memo(function IngredientSelector({
             <Pressable
               key={tab}
               style={[styles.tab, activeTab === tab && styles.tabActive]}
-              onPress={() => setActiveTab(tab)}>
+              onPress={() => setActiveTab(tab)}
+              hitSlop={8}>
               <Text
                 style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>
                 {tab === 'scan' && '📷 Scan'}
@@ -167,7 +170,10 @@ export const IngredientSelector = React.memo(function IngredientSelector({
             {activeTab === 'scan' && (
               <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Scan a barcode</Text>
-                <Pressable style={styles.scanButton} onPress={onScanPressed}>
+                <Pressable 
+                  style={styles.scanButton} 
+                  onPress={onScanPressed}
+                  hitSlop={10}>
                   <Text style={styles.scanButtonText}>📷 Open Camera</Text>
                 </Pressable>
               </View>
@@ -260,7 +266,10 @@ export const IngredientSelector = React.memo(function IngredientSelector({
                   </View>
                 </View>
 
-                <Pressable style={styles.submitButton} onPress={handleManualSubmit}>
+                <Pressable 
+                  style={styles.submitButton} 
+                  onPress={handleManualSubmit}
+                  hitSlop={10}>
                   <Text style={styles.submitButtonText}>✓ Add Ingredient</Text>
                 </Pressable>
               </View>
@@ -283,7 +292,8 @@ export const IngredientSelector = React.memo(function IngredientSelector({
                         </View>
                         <Pressable
                           style={styles.selectButton}
-                          onPress={() => handleSavedFoodSelect(food)}>
+                          onPress={() => handleSavedFoodSelect(food)}
+                          hitSlop={10}>
                           <Text style={styles.selectButtonText}>+</Text>
                         </Pressable>
                       </View>

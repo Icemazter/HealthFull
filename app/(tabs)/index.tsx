@@ -40,9 +40,12 @@ export default function HomeScreen() {
   const [showManualEntry, setShowManualEntry] = useState(false);
   const insets = useSafeAreaInsets();
 
+  const [refreshKey, setRefreshKey] = useState(0);
+
   useFocusEffect(
     useCallback(() => {
-      // Force re-render when screen is focused to update entries
+      // Force re-load when screen is focused to ensure latest data
+      setRefreshKey(k => k + 1);
     }, [])
   );
 
@@ -133,13 +136,14 @@ export default function HomeScreen() {
 
   const handleAddIngredient = useCallback(
     (ingredient: any) => {
-      if (currentRecipe) {
-        const updated = addIngredientToRecipe(currentRecipe, ingredient);
-        setCurrentRecipe(updated);
-      }
-      setShowIngredientSelector(false);
+      setCurrentRecipe(recipe => {
+        if (!recipe) return null;
+        const updated = addIngredientToRecipe(recipe, ingredient);
+        return updated;
+      });
+      // Keep selector open for adding more ingredients
     },
-    [currentRecipe]
+    []
   );
 
   const handleDeleteRecipe = useCallback(
@@ -169,9 +173,10 @@ export default function HomeScreen() {
     async (scaledNutrition: { calories: number; protein: number; carbs: number; fat: number; fiber: number }) => {
       if (!selectedRecipeForLogging) return;
       
+      const recipeName = selectedRecipeForLogging.name;
       const entry: FoodEntry = {
         id: `recipe_${Date.now()}`,
-        name: selectedRecipeForLogging.name,
+        name: recipeName,
         calories: scaledNutrition.calories,
         protein: scaledNutrition.protein,
         carbs: scaledNutrition.carbs,
@@ -184,7 +189,8 @@ export default function HomeScreen() {
       await foodManager.addEntry(entry);
       setShowRecipeLogger(false);
       setSelectedRecipeForLogging(null);
-      await feedback.success(`${selectedRecipeForLogging.name} logged!`);
+      setRefreshKey(k => k + 1); // Trigger refresh to show new entry
+      await feedback.success(`${recipeName} logged!`);
     },
     [selectedRecipeForLogging, foodManager]
   );
@@ -396,6 +402,7 @@ export default function HomeScreen() {
           
           await foodManager.addEntry(newEntry);
           setShowManualEntry(false);
+          setRefreshKey(k => k + 1); // Trigger refresh to show new entry
           await feedback.success(`${entry.name} added!`);
         }}
       />

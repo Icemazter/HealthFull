@@ -9,6 +9,7 @@ import {
     TextInput,
     View
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface ManualEntryModalProps {
   visible: boolean;
@@ -28,6 +29,7 @@ export const ManualEntryModal = React.memo(function ManualEntryModal({
   onAdd,
   onCancel,
 }: ManualEntryModalProps) {
+  const insets = useSafeAreaInsets();
   const [name, setName] = useState('');
   const [calories, setCalories] = useState('');
   const [protein, setProtein] = useState('');
@@ -67,13 +69,13 @@ export const ManualEntryModal = React.memo(function ManualEntryModal({
 
   return (
     <Modal visible={visible} animationType="slide" transparent={false}>
-      <View style={styles.container}>
+      <View style={[styles.container, { paddingTop: insets.top }]}>
         <View style={styles.header}>
-          <Pressable onPress={onCancel}>
+          <Pressable onPress={onCancel} hitSlop={10}>
             <Text style={styles.cancelButton}>✕</Text>
           </Pressable>
           <Text style={styles.headerTitle}>Manual Entry</Text>
-          <Pressable style={styles.addButton} onPress={handleAdd}>
+          <Pressable style={styles.addButton} onPress={handleAdd} hitSlop={10}>
             <Text style={styles.addButtonText}>Add</Text>
           </Pressable>
         </View>

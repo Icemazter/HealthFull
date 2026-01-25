@@ -49,6 +49,11 @@ export function portionRecipe(
   recipe: Recipe,
   portionSizeInGrams: number
 ) {
+  // Ensure we have valid numbers
+  if (!portionSizeInGrams || portionSizeInGrams <= 0 || !recipe.totalWeightInGrams) {
+    return { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 };
+  }
+
   const recipeTotalNutrition = calculateRecipeNutrition(recipe.ingredients);
   const scaleFactor = portionSizeInGrams / recipe.totalWeightInGrams;
 

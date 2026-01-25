@@ -10,6 +10,7 @@ import {
     TextInput,
     View
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface RecipeLoggerProps {
   visible: boolean;
@@ -31,6 +32,7 @@ export const RecipeLogger = React.memo(function RecipeLogger({
   onLog,
   onCancel,
 }: RecipeLoggerProps) {
+  const insets = useSafeAreaInsets();
   const [portionSize, setPortionSize] = useState(
     Math.round(recipe.totalWeightInGrams / 2).toString()
   );
@@ -54,18 +56,18 @@ export const RecipeLogger = React.memo(function RecipeLogger({
     });
   };
 
-  const portioned = portionRecipe(recipe, parseFloat(portionSize) || 0);
+  const portioned = portionRecipe(recipe, parseFloat(portionSize) || 100); // Default to 100g if empty
   const totalNutrition = portioned;
 
   return (
     <Modal visible={visible} animationType="slide" transparent={false}>
-      <View style={styles.container}>
+      <View style={[styles.container, { paddingTop: insets.top }]}>
         <View style={styles.header}>
-          <Pressable onPress={onCancel}>
+          <Pressable onPress={onCancel} hitSlop={10}>
             <Text style={styles.cancelButton}>✕</Text>
           </Pressable>
           <Text style={styles.headerTitle}>Log Recipe</Text>
-          <Pressable style={styles.logButton} onPress={handleLog}>
+          <Pressable style={styles.logButton} onPress={handleLog} hitSlop={10}>
             <Text style={styles.logButtonText}>Add</Text>
           </Pressable>
         </View>
