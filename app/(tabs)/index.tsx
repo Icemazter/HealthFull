@@ -13,7 +13,7 @@ import { STORAGE_KEYS } from '@/utils/storage';
 import { useFocusEffect } from '@react-navigation/native';
 import { router } from 'expo-router';
 import React, { useCallback, useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const mealOrder: Array<'Breakfast' | 'Lunch' | 'Dinner' | 'Snack' | 'Other'> = [
@@ -91,17 +91,26 @@ export default function HomeScreen() {
   }, [foodManager]);
 
   const handleCreateRecipe = useCallback(async () => {
-    Alert.prompt(
-      'Recipe Name',
-      'Enter a name for your recipe',
-      async (name: string) => {
-        if (name.trim()) {
-          const recipe = await addRecipe(name);
-          setCurrentRecipe(recipe);
-          setShowRecipeBuilder(true);
+    const createAndOpen = async (name: string) => {
+      const recipe = await addRecipe(name);
+      setCurrentRecipe(recipe);
+      setShowRecipeBuilder(true);
+    };
+
+    if (Platform.OS === 'ios') {
+      Alert.prompt(
+        'Recipe Name',
+        'Enter a name for your recipe',
+        async (name: string) => {
+          const trimmed = (name ?? '').trim();
+          await createAndOpen(trimmed || 'New Recipe');
         }
-      }
-    );
+      );
+      return;
+    }
+
+    const fallbackName = `Recipe ${new Date().toLocaleDateString()}`;
+    await createAndOpen(fallbackName);
   }, [addRecipe]);
 
   const handleSelectRecipe = useCallback((recipe: Recipe) => {

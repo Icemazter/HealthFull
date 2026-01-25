@@ -80,6 +80,7 @@ export const scanStyles = StyleSheet.create({
     height: '70%',
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
   },
   sideDarkArea: {
     flex: 1,
@@ -88,7 +89,7 @@ export const scanStyles = StyleSheet.create({
   },
   scanFrame: {
     width: '80%',
-    height: '100%',
+    height: '70%',
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: 'transparent',
