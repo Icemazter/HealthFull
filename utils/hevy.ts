@@ -94,15 +94,15 @@ class HevyService {
   }
 
   async validateApiKey(key: string): Promise<boolean> {
+    const originalKey = this.apiKey;
     try {
-      const originalKey = this.apiKey;
       this.apiKey = key;
       
       // Test with a simple request
       await this.request('/workouts?limit=1');
       return true;
     } catch (error) {
-      this.apiKey = originalKey || null;
+      this.apiKey = originalKey;
       return false;
     }
   }
