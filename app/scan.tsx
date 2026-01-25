@@ -4,7 +4,7 @@ import { feedback } from '@/utils/feedback';
 import { storage, STORAGE_KEYS } from '@/utils/storage';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Haptics from 'expo-haptics';
-import { router, useFocusEffect } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Image, Keyboard, KeyboardAvoidingView, Modal, PanResponder, Platform, Pressable, ScrollView, Text, TextInput, TouchableWithoutFeedback, View } from 'react-native';
 import { scanStyles as styles } from './scan.styles';
@@ -30,6 +30,8 @@ type VolumeUnit = 'g' | 'ml' | 'dl' | 'tbsp' | 'tsp';
 
 export default function ScanScreen() {
   const { isDark } = useAppTheme();
+  const params = useLocalSearchParams<{ mode?: string; recipeId?: string }>();
+  const isRecipeMode = params?.mode === 'recipe';
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -368,41 +370,65 @@ export default function ScanScreen() {
     if (!foodData) return;
 
     try {
-      const entries = (await storage.get<any[]>(STORAGE_KEYS.FOOD_ENTRIES, [])) ?? [];
-      
       const totalWeight = totalGrams > 0 ? totalGrams : parseFloat(customAmount) || 100;
       const multiplier = totalWeight / 100; // Convert grams to 100g units
 
-      entries.push({
-        id: Date.now().toString(),
-        name: foodData.name,
-        calories: foodData.nutrients.calories * multiplier,
-        protein: foodData.nutrients.protein * multiplier,
-        carbs: foodData.nutrients.carbs * multiplier,
-        fat: foodData.nutrients.fat * multiplier,
-        fiber: foodData.nutrients.fiber * multiplier,
-        timestamp: Date.now(),
-        mealType: mealType,
-      });
-      await storage.set(STORAGE_KEYS.FOOD_ENTRIES, entries);
-      
-      // Success haptic and feedback
-      if (!isWeb) {
-        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      if (isRecipeMode) {
+        // In recipe mode, pass ingredient back to recipe builder
+        const ingredient = {
+          id: `ing_${Date.now()}`,
+          name: foodData.name,
+          calories: foodData.nutrients.calories * multiplier,
+          protein: foodData.nutrients.protein * multiplier,
+          carbs: foodData.nutrients.carbs * multiplier,
+          fat: foodData.nutrients.fat * multiplier,
+          fiber: foodData.nutrients.fiber * multiplier,
+          weightInGrams: totalWeight,
+        };
+        
+        // Pass back with params
+        router.back();
+        // Store temp ingredient data to be picked up by recipe builder
+        await storage.set('TEMP_SCANNED_INGREDIENT', ingredient);
+        if (!isWeb) {
+          await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        }
+        await feedback.success('Ingredient scanned!');
+      } else {
+        // Normal nutrition mode - add to daily food log
+        const entries = (await storage.get<any[]>(STORAGE_KEYS.FOOD_ENTRIES, [])) ?? [];
+        
+        entries.push({
+          id: Date.now().toString(),
+          name: foodData.name,
+          calories: foodData.nutrients.calories * multiplier,
+          protein: foodData.nutrients.protein * multiplier,
+          carbs: foodData.nutrients.carbs * multiplier,
+          fat: foodData.nutrients.fat * multiplier,
+          fiber: foodData.nutrients.fiber * multiplier,
+          timestamp: Date.now(),
+          mealType: mealType,
+        });
+        await storage.set(STORAGE_KEYS.FOOD_ENTRIES, entries);
+        
+        // Success haptic and feedback
+        if (!isWeb) {
+          await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        }
+        
+        // Reset state
+        setScanned(false);
+        setLoading(false);
+        setShowOptions(false);
+        setFoodData(null);
+        handleCancel();
       }
-      
-      // Reset state
-      setScanned(false);
-      setLoading(false);
-      setShowOptions(false);
-      setFoodData(null);
-      handleCancel();
     } catch (error) {
       // Error haptic
       if (!isWeb) {
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       }
-      await feedback.alert('Error', 'Failed to save food entry.');
+      await feedback.alert('Error', 'Failed to process scanned item.');
       // Reset state on error too
       setScanned(false);
       setLoading(false);

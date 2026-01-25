@@ -1,4 +1,5 @@
 import { IngredientSelector, RecipeBuilder, RecipeLogger, RecipesList } from '@/components/recipes';
+import { ManualEntryModal } from '@/components/scan/ManualEntryModal';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { FoodEntryCard } from '@/components/ui/food-entry-card';
@@ -36,6 +37,7 @@ export default function HomeScreen() {
   const [showIngredientSelector, setShowIngredientSelector] = useState(false);
   const [showRecipeLogger, setShowRecipeLogger] = useState(false);
   const [selectedRecipeForLogging, setSelectedRecipeForLogging] = useState<Recipe | null>(null);
+  const [showManualEntry, setShowManualEntry] = useState(false);
   const insets = useSafeAreaInsets();
 
   useFocusEffect(
@@ -303,7 +305,14 @@ export default function HomeScreen() {
       />
 
       <ThemedView style={styles.listContainer}>
-        <ThemedText type="subtitle" style={styles.listTitle}>Food Log</ThemedText>
+        <View style={styles.listHeader}>
+          <ThemedText type="subtitle" style={styles.listTitle}>Food Log</ThemedText>
+          <Pressable 
+            style={styles.addEntryButton}
+            onPress={() => setShowManualEntry(true)}>
+            <Text style={styles.addEntryButtonText}>+ Add</Text>
+          </Pressable>
+        </View>
         {foodManager.entries.length === 0 ? (
           <Text style={[styles.emptyText, isDark && styles.emptyTextDark]}>No entries yet. Tap "Scan Barcode" to add food.</Text>
         ) : (
@@ -347,7 +356,10 @@ export default function HomeScreen() {
               onScanPressed={() => {
                 setShowIngredientSelector(false);
                 setShowRecipeBuilder(false);
-                router.push('/scan');
+                router.push({
+                  pathname: '/scan',
+                  params: { mode: 'recipe', recipeId: currentRecipe?.id }
+                });
               }}
             />
           </>
@@ -365,6 +377,28 @@ export default function HomeScreen() {
           />
         )}
       </ThemedView>
+
+      <ManualEntryModal
+        visible={showManualEntry}
+        onCancel={() => setShowManualEntry(false)}
+        onAdd={async (entry) => {
+          const newEntry: FoodEntry = {
+            id: `manual_${Date.now()}`,
+            name: entry.name,
+            calories: entry.calories,
+            protein: entry.protein,
+            carbs: entry.carbs,
+            fat: entry.fat,
+            fiber: entry.fiber,
+            timestamp: Date.now(),
+            mealType: 'Lunch',
+          };
+          
+          await foodManager.addEntry(newEntry);
+          setShowManualEntry(false);
+          await feedback.success(`${entry.name} added!`);
+        }}
+      />
     </ScrollView>
     </>
   );
@@ -691,6 +725,25 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     marginLeft: 16,
     marginTop: 8,
+  },
+  listHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 12,
+  },
+  addEntryButton: {
+    backgroundColor: Palette.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  addEntryButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
   },
   emptyText: {
     textAlign: 'center',

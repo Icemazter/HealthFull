@@ -48,10 +48,27 @@ export const IngredientSelector = React.memo(function IngredientSelector({
   const [selectedAmount, setSelectedAmount] = useState('100');
 
   React.useEffect(() => {
-    if (visible && activeTab === 'saved') {
-      loadSavedFoods();
+    if (visible) {
+      checkForScannedIngredient();
+      if (activeTab === 'saved') {
+        loadSavedFoods();
+      }
     }
   }, [visible, activeTab]);
+
+  const checkForScannedIngredient = async () => {
+    try {
+      const scannedIng = await storage.get<RecipeIngredient | null>('TEMP_SCANNED_INGREDIENT', undefined);
+      if (scannedIng) {
+        // Clear the temp storage
+        await storage.set('TEMP_SCANNED_INGREDIENT', null);
+        // Select the ingredient
+        onSelect(scannedIng);
+      }
+    } catch (error) {
+      console.error('Error checking for scanned ingredient:', error);
+    }
+  };
 
   const loadSavedFoods = async () => {
     try {
