@@ -304,8 +304,9 @@ export default function HomeScreen() {
               onSelect={handleAddIngredient}
               onCancel={() => setShowIngredientSelector(false)}
               onScanPressed={() => {
-                // Navigate to scan with recipe context
                 setShowIngredientSelector(false);
+                setShowRecipeBuilder(false);
+                router.push('/scan');
               }}
             />
           </>
