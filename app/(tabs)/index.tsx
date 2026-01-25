@@ -1,5 +1,6 @@
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { FoodEntryCard } from '@/components/ui/food-entry-card';
 import { Palette } from '@/constants/theme';
 import { FoodEntry, useFoodManager } from '@/hooks/use-food-manager';
 import { usePersistedState } from '@/hooks/use-persisted-state';
@@ -23,9 +24,9 @@ const mealOrder: Array<'Breakfast' | 'Lunch' | 'Dinner' | 'Snack' | 'Other'> = [
 export default function HomeScreen() {
   const { isDark, toggleTheme } = useAppTheme();
   const foodManager = useFoodManager();
-  const [goals, setGoals] = usePersistedState(STORAGE_KEYS.MACRO_GOALS, { calories: 2000, protein: 150, carbs: 200, fat: 65 });
+  const [goals, setGoals] = usePersistedState(STORAGE_KEYS.MACRO_GOALS, { calories: 2000, protein: 150, carbs: 200, fat: 65, fiber: 30 });
   const [diabetesMode] = usePersistedState(STORAGE_KEYS.DIABETES_MODE, false);
-  const [focusedMacro, setFocusedMacro] = useState<'calories' | 'protein' | 'carbs' | 'fat'>('calories');
+  const [focusedMacro, setFocusedMacro] = useState<'calories' | 'protein' | 'carbs' | 'fat' | 'fiber'>('calories');
   const insets = useSafeAreaInsets();
 
   useFocusEffect(
@@ -33,6 +34,33 @@ export default function HomeScreen() {
       // Force re-render when screen is focused to update entries
     }, [])
   );
+
+  // Normalize goals in case legacy data is missing fiber or values are stored as strings
+  const normalizedGoals = useMemo(() => {
+    const fallbackFiber = (goals as any).fiber ?? 30;
+    return {
+      calories: Number((goals as any).calories ?? goals.calories) || 0,
+      protein: Number((goals as any).protein ?? goals.protein) || 0,
+      carbs: Number((goals as any).carbs ?? goals.carbs) || 0,
+      fat: Number((goals as any).fat ?? goals.fat) || 0,
+      fiber: Number(fallbackFiber) || 0,
+    };
+  }, [goals]);
+
+  const macroOptions = useMemo(() => ([
+    { key: 'calories' as const, label: 'Calories', value: foodManager.totals.calories, goal: normalizedGoals.calories, unit: '', suffix: '' },
+    { key: 'protein' as const, label: 'Protein', value: foodManager.totals.protein, goal: normalizedGoals.protein, unit: 'g', suffix: 'g' },
+    { key: 'carbs' as const, label: 'Carbs', value: foodManager.totals.carbs, goal: normalizedGoals.carbs, unit: 'g', suffix: 'g' },
+    { key: 'fat' as const, label: 'Fat', value: foodManager.totals.fat, goal: normalizedGoals.fat, unit: 'g', suffix: 'g' },
+    { key: 'fiber' as const, label: 'Fiber', value: foodManager.totals.fiber ?? 0, goal: normalizedGoals.fiber, unit: 'g', suffix: 'g' },
+  ]), [foodManager.totals, normalizedGoals]);
+
+  const focused = macroOptions.find((m) => m.key === focusedMacro) ?? macroOptions[0];
+
+  const percent = useMemo(() => {
+    if (!focused.goal) return 0;
+    return Math.min(Math.round((focused.value / focused.goal) * 100), 999);
+  }, [focused]);
 
   const groupedEntries = useMemo(() => {
     const groups: Record<string, FoodEntry[]> = {};
@@ -63,6 +91,10 @@ export default function HomeScreen() {
     );
   }, [foodManager]);
 
+  const handleToggleFavorite = useCallback((item: FoodEntry) => {
+    foodManager.toggleFavorite(item);
+  }, [foodManager]);
+
   return (
     <>
       <ScrollView style={[styles.container, isDark && styles.containerDark]}>
@@ -76,75 +108,35 @@ export default function HomeScreen() {
       <ThemedView style={[styles.totalsCard, isDark && styles.totalsCardDark]}>
         <View style={styles.totalRow}>
           <View>
-            <Text style={styles.totalLabel}>
-              {focusedMacro === 'calories' && 'Calories'}
-              {focusedMacro === 'protein' && 'Protein'}
-              {focusedMacro === 'carbs' && 'Carbs'}
-              {focusedMacro === 'fat' && 'Fat'}
-            </Text>
+            <Text style={styles.totalLabel}>{focused.label}</Text>
             <Text style={styles.totalValue}>
-              {focusedMacro === 'calories' && `${Math.round(foodManager.totals.calories)} / ${goals.calories}`}
-              {focusedMacro === 'protein' && `${Math.round(foodManager.totals.protein)}g / ${goals.protein}g`}
-              {focusedMacro === 'carbs' && `${Math.round(foodManager.totals.carbs)}g / ${goals.carbs}g`}
-              {focusedMacro === 'fat' && `${Math.round(foodManager.totals.fat)}g / ${goals.fat}g`}
+              {`${Math.round(focused.value)}${focused.suffix && ` ${focused.suffix}`} / ${focused.goal || 0}${focused.unit}`}
             </Text>
           </View>
-          <Text style={styles.percentageText}>
-            {focusedMacro === 'calories' && `${Math.round((foodManager.totals.calories / goals.calories) * 100)}%`}
-            {focusedMacro === 'protein' && `${Math.round((foodManager.totals.protein / goals.protein) * 100)}%`}
-            {focusedMacro === 'carbs' && `${Math.round((foodManager.totals.carbs / goals.carbs) * 100)}%`}
-            {focusedMacro === 'fat' && `${Math.round((foodManager.totals.fat / goals.fat) * 100)}%`}
-          </Text>
+          <Text style={styles.percentageText}>{percent}%</Text>
         </View>
         <View style={styles.progressBarContainer}>
           <View 
             style={[
               styles.progressBar,
-              focusedMacro === 'calories' && { width: `${Math.min((foodManager.totals.calories / goals.calories) * 100, 100)}%` },
-              focusedMacro === 'protein' && { width: `${Math.min((foodManager.totals.protein / goals.protein) * 100, 100)}%` },
-              focusedMacro === 'carbs' && { width: `${Math.min((foodManager.totals.carbs / goals.carbs) * 100, 100)}%` },
-              focusedMacro === 'fat' && { width: `${Math.min((foodManager.totals.fat / goals.fat) * 100, 100)}%` },
+              { width: `${Math.min((focused.goal ? (focused.value / focused.goal) * 100 : 0), 100)}%` },
             ]} 
           />
         </View>
         
         <View style={styles.macrosRow}>
-          {focusedMacro !== 'protein' && (
-            <Pressable 
-              style={styles.macroItem}
-              onPress={() => setFocusedMacro('protein')}>
-              <Text style={styles.macroLabel}>Protein</Text>
-              <Text style={styles.macroValue}>{Math.round(foodManager.totals.protein)}g</Text>
-              <Text style={styles.macroGoal}>/{goals.protein}g</Text>
+          {macroOptions.map((macro) => (
+            <Pressable
+              key={macro.key}
+              style={[styles.macroItem, focusedMacro === macro.key && styles.macroItemActive]}
+              onPress={() => setFocusedMacro(macro.key)}>
+              <Text style={[styles.macroLabel, focusedMacro === macro.key && styles.macroLabelActive]}>{macro.label}</Text>
+              <Text style={[styles.macroValue, focusedMacro === macro.key && styles.macroValueHighlight]}>
+                {Math.round(macro.value)}{macro.unit}
+              </Text>
+              <Text style={styles.macroGoal}>/{macro.goal}{macro.unit}</Text>
             </Pressable>
-          )}
-          {focusedMacro !== 'carbs' && (
-            <Pressable 
-              style={styles.macroItem}
-              onPress={() => setFocusedMacro('carbs')}>
-              <Text style={styles.macroLabel}>Carbs</Text>
-              <Text style={[styles.macroValue, diabetesMode && styles.macroValueHighlight]}>{Math.round(foodManager.totals.carbs)}g</Text>
-              <Text style={styles.macroGoal}>/{goals.carbs}g</Text>
-            </Pressable>
-          )}
-          {focusedMacro !== 'fat' && (
-            <Pressable 
-              style={styles.macroItem}
-              onPress={() => setFocusedMacro('fat')}>
-              <Text style={styles.macroLabel}>Fat</Text>
-              <Text style={styles.macroValue}>{Math.round(foodManager.totals.fat)}g</Text>
-              <Text style={styles.macroGoal}>/{goals.fat}g</Text>
-            </Pressable>
-          )}
-          {focusedMacro !== 'calories' && (
-            <Pressable 
-              style={styles.macroItem}
-              onPress={() => setFocusedMacro('calories')}>
-              <Text style={styles.macroLabel}>Calories</Text>
-              <Text style={styles.macroValue}>{Math.round(foodManager.totals.calories)}</Text>
-              <Text style={styles.macroGoal}>/{goals.calories}</Text>
-            </Pressable>
-          )}
+          ))}
         </View>
       </ThemedView>
 
@@ -217,37 +209,17 @@ export default function HomeScreen() {
                 <Text style={[styles.mealHeader, isDark && styles.mealHeaderDark]}>{section.meal}</Text>
                 <Text style={[styles.mealCount, isDark && styles.mealCountDark]}>{section.items.length} item{section.items.length > 1 ? 's' : ''}</Text>
               </View>
-              {section.items.map((item) => {
-                const isFav = foodManager.isFavorite(item);
-                return (
-                  <View key={item.id} style={[styles.entryCard, isDark && styles.entryCardDark]}>
-                    <View style={styles.entryContent}>
-                      <Text style={[styles.entryName, isDark && styles.entryNameDark]}>{item.name}</Text>
-                      {diabetesMode ? (
-                        <Text style={[styles.entryMacros, isDark && styles.entryMacrosDark]}>
-                          <Text style={styles.carbsHighlight}>🍞 {Math.round(item.carbs)}g carbs</Text> • {Math.round(item.calories)} cal • P: {Math.round(item.protein)}g • F: {Math.round(item.fat)}g
-                        </Text>
-                      ) : (
-                        <Text style={[styles.entryMacros, isDark && styles.entryMacrosDark]}>
-                          {Math.round(item.calories)} cal • P: {Math.round(item.protein)}g • C: {Math.round(item.carbs)}g • F: {Math.round(item.fat)}g
-                        </Text>
-                      )}
-                    </View>
-                    <View style={styles.entryActions}>
-                      <Pressable
-                        style={[styles.favoriteButton, isDark && styles.favoriteButtonDark]}
-                        onPress={() => foodManager.toggleFavorite(item)}>
-                        <Text style={styles.favoriteButtonText}>{isFav ? '⭐' : '☆'}</Text>
-                      </Pressable>
-                      <Pressable
-                        style={[styles.removeButton, isDark && styles.removeButtonDark]}
-                        onPress={() => handleRemoveEntry(item.id)}>
-                        <Text style={[styles.removeButtonText, isDark && styles.removeButtonTextDark]}>✕</Text>
-                      </Pressable>
-                    </View>
-                  </View>
-                );
-              })}
+              {section.items.map((item) => (
+                <FoodEntryCard
+                  key={item.id}
+                  item={item}
+                  isDark={isDark}
+                  diabetesMode={diabetesMode}
+                  isFavorite={foodManager.isFavorite(item)}
+                  onRemove={handleRemoveEntry}
+                  onToggleFavorite={handleToggleFavorite}
+                />
+              ))}
             </View>
           ))
         )}
@@ -347,23 +319,35 @@ const styles = StyleSheet.create({
   },
   macrosRow: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    gap: 12,
+    flexWrap: 'wrap',
+    rowGap: 10,
+    columnGap: 12,
+    justifyContent: 'space-between',
   },
   macroItem: {
-    flex: 1,
+    flexGrow: 1,
+    width: '48%',
     alignItems: 'center',
     paddingVertical: 12,
     paddingHorizontal: 8,
     backgroundColor: 'rgba(255,255,255,0.15)',
     borderRadius: 12,
     borderWidth: 0,
+    marginBottom: 6,
+  },
+  macroItemActive: {
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.6)',
   },
   macroLabel: {
     fontSize: 12,
     color: 'rgba(255,255,255,0.7)',
     marginBottom: 6,
     fontWeight: '500',
+  },
+  macroLabelActive: {
+    color: 'rgba(255,255,255,0.95)',
   },
   macroValue: {
     fontSize: 18,
@@ -507,82 +491,6 @@ const styles = StyleSheet.create({
   },
   mealCountDark: {
     color: '#6b7280',
-  },
-  entryCard: {
-    padding: 14,
-    backgroundColor: Palette.white,
-    borderRadius: 12,
-    marginBottom: 10,
-    marginHorizontal: 16,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#f0f0f0',
-  },
-  entryCardDark: {
-    backgroundColor: '#1a1a1a',
-    borderColor: '#333',
-  },
-  entryContent: {
-    flex: 1,
-  },
-  entryName: {
-    fontSize: 15,
-    fontWeight: '600',
-    marginBottom: 4,
-    color: '#333',
-  },
-  entryNameDark: {
-    color: '#e5e5e5',
-  },
-  entryMacros: {
-    fontSize: 13,
-    color: '#888',
-  },
-  entryMacrosDark: {
-    color: '#9ca3af',
-  },
-  carbsHighlight: {
-    fontWeight: '700',
-    color: '#f59e0b',
-  },
-  entryActions: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  favoriteButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#fff3cd',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  favoriteButtonDark: {
-    backgroundColor: '#4a3a0a',
-  },
-  favoriteButtonText: {
-    fontSize: 18,
-  },
-  removeButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#ffe5e5',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  removeButtonDark: {
-    backgroundColor: '#4a1a1a',
-  },
-  removeButtonText: {
-    color: Palette.error,
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  removeButtonTextDark: {
-    color: '#ff6b6b',
   },
   favoritesSection: {
     marginHorizontal: 16,

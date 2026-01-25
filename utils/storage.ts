@@ -1,5 +1,24 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+type StorageListener = (value: any) => void;
+const storageListeners: Record<string, Set<StorageListener>> = {};
+
+const emitStorage = (key: string, value: any) => {
+  const listeners = storageListeners[key];
+  if (!listeners) return;
+  listeners.forEach((listener) => listener(value));
+};
+
+export const storageEvents = {
+  subscribe: (key: string, listener: StorageListener) => {
+    if (!storageListeners[key]) storageListeners[key] = new Set();
+    storageListeners[key]!.add(listener);
+    return () => {
+      storageListeners[key]?.delete(listener);
+    };
+  },
+};
+
 export const storage = {
   async get<T>(key: string, defaultValue?: T): Promise<T | null> {
     try {
@@ -14,6 +33,7 @@ export const storage = {
   async set<T>(key: string, value: T): Promise<boolean> {
     try {
       await AsyncStorage.setItem(key, JSON.stringify(value));
+      emitStorage(key, value);
       return true;
     } catch (error) {
       console.error(`Failed to save ${key}:`, error);
@@ -24,6 +44,7 @@ export const storage = {
   async remove(key: string): Promise<boolean> {
     try {
       await AsyncStorage.removeItem(key);
+      emitStorage(key, null);
       return true;
     } catch (error) {
       console.error(`Failed to remove ${key}:`, error);
@@ -53,9 +74,25 @@ export const storage = {
         JSON.stringify(value),
       ] as [string, string]);
       await AsyncStorage.multiSet(pairs);
+      for (const [key, value] of Object.entries(items)) {
+        emitStorage(key, value);
+      }
       return true;
     } catch (error) {
       console.error('Failed to save multiple keys:', error);
+      return false;
+    }
+  },
+
+  async multiRemove(keys: string[]): Promise<boolean> {
+    try {
+      await AsyncStorage.multiRemove(keys);
+      for (const key of keys) {
+        emitStorage(key, null);
+      }
+      return true;
+    } catch (error) {
+      console.error('Failed to remove multiple keys:', error);
       return false;
     }
   },

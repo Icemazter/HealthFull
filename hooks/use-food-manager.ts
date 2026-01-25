@@ -10,6 +10,7 @@ export interface FoodEntry {
   protein: number;
   carbs: number;
   fat: number;
+  fiber?: number;
   timestamp: number;
   mealType?: 'Breakfast' | 'Lunch' | 'Dinner' | 'Snack';
   isFavorite?: boolean;
@@ -41,8 +42,9 @@ export function useFoodManager() {
         protein: acc.protein + entry.protein,
         carbs: acc.carbs + entry.carbs,
         fat: acc.fat + entry.fat,
+        fiber: acc.fiber + (entry.fiber ?? 0),
       }),
-      { calories: 0, protein: 0, carbs: 0, fat: 0 }
+      { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 }
     );
   }, [todayEntries]);
 

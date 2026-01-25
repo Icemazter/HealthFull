@@ -1,4 +1,4 @@
-import { storage } from '@/utils/storage';
+import { storage, storageEvents } from '@/utils/storage';
 import { useCallback, useEffect, useState } from 'react';
 
 export function usePersistedState<T>(
@@ -17,6 +17,16 @@ export function usePersistedState<T>(
       setLoaded(true);
     };
     loadState();
+
+    // Subscribe to external storage changes so other screens reflect updates immediately
+    const unsubscribe = storageEvents.subscribe(key, (nextValue) => {
+      setState(nextValue ?? defaultValue);
+      setLoaded(true);
+    });
+
+    return () => {
+      unsubscribe();
+    };
   }, [key]);
 
   const setPersistedState = useCallback(

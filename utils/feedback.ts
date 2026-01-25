@@ -30,6 +30,10 @@ function showConfirm(title: string, message: string, onConfirm: () => void, onCa
 }
 
 export const feedback = {
+  alert(title: string, message?: string) {
+    showAlert(title, message);
+  },
+
   async success(message?: string, title = 'Success') {
     if (!isWeb) {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);

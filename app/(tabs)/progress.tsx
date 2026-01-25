@@ -1,3 +1,4 @@
+import { AchievementCard } from '@/components/ui/achievement-card';
 import { Palette } from '@/constants/theme';
 import { useAppTheme } from '@/hooks/use-theme';
 import { storage, STORAGE_KEYS } from '@/utils/storage';
@@ -240,45 +241,16 @@ export default function ProgressScreen() {
         </Text>
         
         {achievements.map((achievement) => (
-          <View 
-            key={achievement.id} 
-            style={[
-              styles.achievementCard,
-              isDark && styles.achievementCardDark,
-              achievement.unlocked && styles.achievementUnlocked,
-              achievement.unlocked && isDark && styles.achievementUnlockedDark
-            ]}>
-            <Text style={styles.achievementEmoji}>{achievement.emoji}</Text>
-            <View style={styles.achievementInfo}>
-              <Text style={[
-                styles.achievementTitle,
-                isDark && styles.achievementTitleDark,
-                achievement.unlocked && styles.achievementTitleUnlocked,
-                achievement.unlocked && isDark && styles.achievementTitleUnlockedDark
-              ]}>
-                {achievement.title}
-              </Text>
-              <Text style={[styles.achievementDescription, isDark && styles.achievementDescriptionDark]}>
-                {achievement.description}
-              </Text>
-              {achievement.progress !== undefined && achievement.total && !achievement.unlocked && (
-                <View style={styles.progressBarContainer}>
-                  <View 
-                    style={[
-                      styles.progressBar,
-                      { width: `${(achievement.progress / achievement.total) * 100}%` }
-                    ]} 
-                  />
-                  <Text style={styles.progressText}>
-                    {achievement.progress} / {achievement.total}
-                  </Text>
-                </View>
-              )}
-            </View>
-            {achievement.unlocked && (
-              <Text style={styles.checkmark}>✓</Text>
-            )}
-          </View>
+          <AchievementCard
+            key={achievement.id}
+            emoji={achievement.emoji}
+            title={achievement.title}
+            description={achievement.description}
+            unlocked={achievement.unlocked}
+            isDark={isDark}
+            progress={achievement.progress}
+            total={achievement.total}
+          />
         ))}
       </View>
     </ScrollView>
@@ -391,85 +363,5 @@ const styles = StyleSheet.create({
   },
   achievementCountDark: {
     color: '#9ca3af',
-  },
-  achievementCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    backgroundColor: Palette.lightGray2,
-    borderRadius: 12,
-    marginBottom: 12,
-    borderWidth: 2,
-    borderColor: '#e5e5e5',
-    opacity: 0.6,
-  },
-  achievementCardDark: {
-    backgroundColor: '#1a1a1a',
-    borderColor: '#333',
-  },
-  achievementUnlocked: {
-    backgroundColor: Palette.white,
-    borderColor: Palette.primary,
-    opacity: 1,
-  },
-  achievementUnlockedDark: {
-    backgroundColor: '#1a1a1a',
-    borderColor: '#60a5fa',
-  },
-  achievementEmoji: {
-    fontSize: 40,
-    marginRight: 16,
-  },
-  achievementInfo: {
-    flex: 1,
-  },
-  achievementTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Palette.darkGray,
-    marginBottom: 4,
-  },
-  achievementTitleDark: {
-    color: '#9ca3af',
-  },
-  achievementTitleUnlocked: {
-    color: Palette.primary,
-  },
-  achievementTitleUnlockedDark: {
-    color: '#60a5fa',
-  },
-  achievementDescription: {
-    fontSize: 14,
-    color: Palette.gray,
-  },
-  achievementDescriptionDark: {
-    color: '#6b7280',
-  },
-  checkmark: {
-    fontSize: 24,
-    color: Palette.success,
-    fontWeight: 'bold',
-  },
-  progressBarContainer: {
-    marginTop: 8,
-    height: 20,
-    backgroundColor: '#e5e5e5',
-    borderRadius: 10,
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  progressBar: {
-    height: '100%',
-    backgroundColor: Palette.primary,
-    borderRadius: 10,
-  },
-  progressText: {
-    position: 'absolute',
-    width: '100%',
-    textAlign: 'center',
-    fontSize: 11,
-    fontWeight: '600',
-    color: Palette.darkGray,
-    lineHeight: 20,
   },
 });

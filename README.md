@@ -19,24 +19,52 @@ iOS-focused health tracker with barcode-based macro logging and exercise trackin
 
 ## Get started
 
-1. Install dependencies
+### Prerequisites
+- Node.js 16+ and npm (or yarn)
+- Expo CLI (optional, but recommended)
+- iOS/Android device or emulator
+
+### Installation
+
+1. Clone the repository
+
+   ```bash
+   git clone <repository-url>
+   cd HealthFull
+   ```
+
+2. Install all dependencies
 
    ```bash
    npm install
    ```
+   
+   This will automatically install all packages listed in `package.json` including:
+   - Expo and Expo Router
+   - React Native
+   - expo-camera (barcode scanning)
+   - AsyncStorage (local data persistence)
+   - TypeScript and development tools
 
-2. Start the app
+3. Start the development server
 
    ```bash
    npx expo start
    ```
 
-In the output, you'll find options to open the app in a
+4. Run the app
 
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+   - **iOS Simulator**: Press `i` in the terminal
+   - **Android Emulator**: Press `a` in the terminal
+   - **Physical Device**: Scan the QR code with Expo Go app (iOS) or Camera (Android)
+   - **Web**: Press `w` in the terminal
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+### Development Server Options
+
+For better mobile device connectivity, use tunnel mode:
+```bash
+npx expo start --tunnel
+```
 
 ## Project Structure
 
