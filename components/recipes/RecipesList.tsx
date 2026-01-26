@@ -2,6 +2,7 @@ import { Palette } from '@/constants/theme';
 import { Recipe } from '@/utils/recipes';
 import React, { useState } from 'react';
 import {
+    Alert,
     Pressable,
     ScrollView,
     StyleSheet,
@@ -62,8 +63,18 @@ export const RecipesList = React.memo(function RecipesList({
                     pressed && styles.deleteCirclePressed,
                   ]}
                   onPress={() => {
-                    console.log('Delete pressed for:', recipe.id);
-                    onDeleteRecipe(recipe.id);
+                    Alert.alert(
+                      'Delete Recipe',
+                      `Are you sure you want to delete "${recipe.name}"?`,
+                      [
+                        { text: 'Cancel', onPress: () => {}, style: 'cancel' },
+                        {
+                          text: 'Delete',
+                          onPress: () => onDeleteRecipe(recipe.id),
+                          style: 'destructive',
+                        },
+                      ]
+                    );
                   }}>
                   <Text style={styles.deleteCircleText}>−</Text>
                 </Pressable>

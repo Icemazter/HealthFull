@@ -964,6 +964,7 @@ const styles = StyleSheet.create({
     gap: 12,
     marginTop: 4,
     marginBottom: 20,
+    paddingHorizontal: 4,
   },
   weightInput: {
     flex: 1,
@@ -983,6 +984,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: Palette.darkGray,
+    minWidth: 35,
   },
   weightUnitDark: {
     color: '#d1d5db',

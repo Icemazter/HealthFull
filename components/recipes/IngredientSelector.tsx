@@ -350,7 +350,10 @@ export const IngredientSelector = React.memo(function IngredientSelector({
                   <View>
                     <View style={styles.selectedFoodCard}>
                       <Pressable 
-                        onPress={() => setSelectedFood(null)}
+                        onPress={() => {
+                          setSelectedFood(null);
+                          setUseExactAmount(false);
+                        }}
                         hitSlop={10}
                         style={styles.backButton}>
                         <Text style={styles.backButtonText}>← Back</Text>
@@ -441,7 +444,12 @@ export const IngredientSelector = React.memo(function IngredientSelector({
                           <TextInput
                             style={styles.input}
                             value={selectedAmount}
-                            onChangeText={setSelectedAmount}
+                            onChangeText={(text) => {
+                              const num = parseFloat(text) || 0;
+                              if (num >= 0) {
+                                setSelectedAmount(text);
+                              }
+                            }}
                             placeholder="100"
                             keyboardType="decimal-pad"
                             placeholderTextColor="#b3b3b3"
@@ -476,7 +484,8 @@ export const IngredientSelector = React.memo(function IngredientSelector({
                             setSelectedAmount(String(food.weight || 100));
                             setUseExactAmount(false);
                           }}
-                          hitSlop={10}>
+                          hitSlop={10}
+                          accessibilityLabel={`Select ${food.name}`}>
                           <Text style={styles.selectButtonText}>+</Text>
                         </Pressable>
                       </View>
@@ -575,6 +584,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: Palette.darkGray,
     marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#e8e8e8',
   },
   smallInput: {
     backgroundColor: Palette.lightGray2,
@@ -583,6 +594,8 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     fontSize: 14,
     color: Palette.darkGray,
+    borderWidth: 1,
+    borderColor: '#e8e8e8',
   },
   row: {
     flexDirection: 'row',

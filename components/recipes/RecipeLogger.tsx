@@ -45,12 +45,17 @@ export const RecipeLogger = React.memo(function RecipeLogger({
     const numServings = parseFloat(servings) || 1;
     
     if (isNaN(portion) || portion <= 0) {
-      alert('Please enter a valid portion size');
+      alert('Please enter a valid portion size (greater than 0g)');
+      return;
+    }
+    
+    if (portion > recipe.totalWeightInGrams) {
+      alert(`Portion size cannot exceed total recipe weight (${recipe.totalWeightInGrams}g)`);
       return;
     }
     
     if (isNaN(numServings) || numServings <= 0) {
-      alert('Please enter a valid number of servings');
+      alert('Please enter a valid number of servings (greater than 0)');
       return;
     }
 
@@ -66,7 +71,7 @@ export const RecipeLogger = React.memo(function RecipeLogger({
     };
 
     onLog({
-      name: `${recipe.name} (${portion}g${numServings > 1 ? ` × ${numServings}` : ''})`,
+      name: `${recipe.name} (${Math.round(portion)}g${numServings > 1 ? ` × ${numServings}` : ''})`,
       calories: Math.round(multipliedNutrition.calories),
       protein: Math.round(multipliedNutrition.protein * 10) / 10,
       carbs: Math.round(multipliedNutrition.carbs * 10) / 10,
@@ -76,7 +81,10 @@ export const RecipeLogger = React.memo(function RecipeLogger({
     });
   };
 
-  const portioned = portionRecipe(recipe, parseFloat(portionSize) || 100); // Default to 100g if empty
+  const defaultPortion = Math.round(recipe.totalWeightInGrams / 2);
+  const parsedPortion = parseFloat(portionSize);
+  const actualPortion = isNaN(parsedPortion) || parsedPortion <= 0 ? defaultPortion : parsedPortion;
+  const portioned = portionRecipe(recipe, actualPortion);
   const numServings = parseFloat(servings) || 1;
   const totalNutrition = {
     calories: portioned.calories * numServings,
@@ -171,19 +179,25 @@ export const RecipeLogger = React.memo(function RecipeLogger({
               <View style={styles.nutriItem}>
                 <Text style={styles.nutriLabel}>Protein</Text>
                 <Text style={styles.nutriValue}>
-                  {Math.round(totalNutrition.protein)}g
+                  {Math.round(totalNutrition.protein * 10) / 10}g
                 </Text>
               </View>
               <View style={styles.nutriItem}>
                 <Text style={styles.nutriLabel}>Carbs</Text>
                 <Text style={styles.nutriValue}>
-                  {Math.round(totalNutrition.carbs)}g
+                  {Math.round(totalNutrition.carbs * 10) / 10}g
                 </Text>
               </View>
               <View style={styles.nutriItem}>
                 <Text style={styles.nutriLabel}>Fat</Text>
                 <Text style={styles.nutriValue}>
-                  {Math.round(totalNutrition.fat)}g
+                  {Math.round(totalNutrition.fat * 10) / 10}g
+                </Text>
+              </View>
+              <View style={styles.nutriItem}>
+                <Text style={styles.nutriLabel}>Fiber</Text>
+                <Text style={styles.nutriValue}>
+                  {Math.round(totalNutrition.fiber * 10) / 10}g
                 </Text>
               </View>
             </View>
@@ -271,7 +285,8 @@ const styles = StyleSheet.create({
   portionInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 12,
+    paddingHorizontal: 4,
   },
   portionInput: {
     flex: 1,
@@ -281,6 +296,8 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     fontSize: 16,
     color: Palette.darkGray,
+    borderWidth: 1,
+    borderColor: '#e8e8e8',
   },
   portionMax: {
     fontSize: 12,
@@ -312,7 +329,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   nutriValue: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '700',
     color: '#fff',
   },

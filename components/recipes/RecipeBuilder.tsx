@@ -176,6 +176,10 @@ export const RecipeBuilder = React.memo(function RecipeBuilder({
                     <Text style={styles.nutriLabel}>Fat</Text>
                     <Text style={styles.nutriValue}>{Math.round(totalNutrition.fat)}g</Text>
                   </View>
+                  <View style={styles.nutriItem}>
+                    <Text style={styles.nutriLabel}>Fiber</Text>
+                    <Text style={styles.nutriValue}>{Math.round(totalNutrition.fiber)}g</Text>
+                  </View>
                 </View>
                 <Text style={styles.totalWeight}>
                   Total Weight: {currentRecipe.totalWeightInGrams}g
@@ -253,6 +257,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: Palette.darkGray,
     marginBottom: 24,
+    borderWidth: 1,
+    borderColor: '#e8e8e8',
   },
   section: {
     marginBottom: 24,

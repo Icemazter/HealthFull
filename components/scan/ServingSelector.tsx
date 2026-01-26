@@ -83,6 +83,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+    paddingHorizontal: 4,
   },
   quantityInputWrapper: {
     flex: 1,
@@ -108,6 +109,7 @@ const styles = StyleSheet.create({
     gap: 6,
     flexWrap: 'wrap',
     flex: 1,
+    paddingRight: 4,
   },
   unitButton: {
     paddingHorizontal: 12,
