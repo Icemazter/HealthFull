@@ -29,6 +29,7 @@ interface SavedFood {
   carbs: number;
   fat: number;
   fiber: number;
+  weight?: number; // Original weight in grams
 }
 
 export const IngredientSelector = React.memo(function IngredientSelector({
@@ -48,6 +49,8 @@ export const IngredientSelector = React.memo(function IngredientSelector({
   const [manualWeight, setManualWeight] = useState('100');
   const [savedFoods, setSavedFoods] = useState<SavedFood[]>([]);
   const [selectedAmount, setSelectedAmount] = useState('100');
+  const [useExactAmount, setUseExactAmount] = useState(false);
+  const [selectedFood, setSelectedFood] = useState<SavedFood | null>(null);
 
   React.useEffect(() => {
     if (visible) {
@@ -76,11 +79,23 @@ export const IngredientSelector = React.memo(function IngredientSelector({
     try {
       const entries = await storage.get<any[]>(STORAGE_KEYS.FOOD_ENTRIES, []);
       if (entries) {
-        // Group by unique food names
-        const uniqueFoods = Array.from(
-          new Map(entries.map((e) => [e.name, e])).values()
-        ) as SavedFood[];
-        setSavedFoods(uniqueFoods);
+        // Group by unique food names and preserve weight info
+        const foodMap = new Map<string, SavedFood>();
+        entries.forEach((e) => {
+          if (!foodMap.has(e.name)) {
+            foodMap.set(e.name, {
+              id: e.id || `food_${e.name}`,
+              name: e.name,
+              calories: e.calories || 0,
+              protein: e.protein || 0,
+              carbs: e.carbs || 0,
+              fat: e.fat || 0,
+              fiber: e.fiber || 0,
+              weight: e.weight || e.weightInGrams || 100,
+            });
+          }
+        });
+        setSavedFoods(Array.from(foodMap.values()));
       }
     } catch (error) {
       console.error('Error loading saved foods:', error);
@@ -109,7 +124,9 @@ export const IngredientSelector = React.memo(function IngredientSelector({
   };
 
   const handleSavedFoodSelect = (food: SavedFood) => {
-    const weight = parseFloat(selectedAmount) || 100;
+    const weight = useExactAmount 
+      ? (food.weight || 100)
+      : (parseFloat(selectedAmount) || 100);
     const multiplier = weight / 100;
 
     const ingredient: RecipeIngredient = {
@@ -125,6 +142,7 @@ export const IngredientSelector = React.memo(function IngredientSelector({
 
     onSelect(ingredient);
     resetManualForm();
+    setSelectedFood(null);
   };
 
   const resetManualForm = () => {
@@ -279,6 +297,117 @@ export const IngredientSelector = React.memo(function IngredientSelector({
               <View style={styles.section}>
                 {savedFoods.length === 0 ? (
                   <Text style={styles.emptyText}>No saved foods yet. Scan some foods first!</Text>
+                ) : selectedFood ? (
+                  <View>
+                    <View style={styles.selectedFoodCard}>
+                      <Pressable 
+                        onPress={() => setSelectedFood(null)}
+                        hitSlop={10}
+                        style={styles.backButton}>
+                        <Text style={styles.backButtonText}>← Back</Text>
+                      </Pressable>
+                      <Text style={styles.selectedFoodName}>{selectedFood.name}</Text>
+                      
+                      <Text style={styles.portionModeTitle}>Choose portion size:</Text>
+                      
+                      <View style={styles.portionButtonsContainer}>
+                        <Pressable 
+                          style={[
+                            styles.portionButton,
+                            !useExactAmount && styles.portionButtonActive
+                          ]}
+                          onPress={() => setUseExactAmount(false)}
+                          hitSlop={8}>
+                          <Text style={[
+                            styles.portionButtonText,
+                            !useExactAmount && styles.portionButtonTextActive
+                          ]}>
+                            📏 Scale from 100g
+                          </Text>
+                          <Text style={[
+                            styles.portionButtonSubtext,
+                            !useExactAmount && styles.portionButtonSubtextActive
+                          ]}>
+                            Standard recipe portions
+                          </Text>
+                        </Pressable>
+                        
+                        <Pressable 
+                          style={[
+                            styles.portionButton,
+                            useExactAmount && styles.portionButtonActive
+                          ]}
+                          onPress={() => setUseExactAmount(true)}
+                          hitSlop={8}>
+                          <Text style={[
+                            styles.portionButtonText,
+                            useExactAmount && styles.portionButtonTextActive
+                          ]}>
+                            ✓ Use exact {selectedFood.weight}g
+                          </Text>
+                          <Text style={[
+                            styles.portionButtonSubtext,
+                            useExactAmount && styles.portionButtonSubtextActive
+                          ]}>
+                            As you logged it
+                          </Text>
+                        </Pressable>
+                      </View>
+
+                      <View style={styles.portionPreviewCard}>
+                        <View style={styles.previewRow}>
+                          <Text style={styles.previewLabel}>Weight:</Text>
+                          <Text style={styles.previewValue}>
+                            {useExactAmount ? selectedFood.weight : selectedAmount}g
+                          </Text>
+                        </View>
+                        <View style={styles.previewRow}>
+                          <Text style={styles.previewLabel}>Calories:</Text>
+                          <Text style={styles.previewValue}>
+                            {Math.round(
+                              selectedFood.calories * 
+                              (useExactAmount 
+                                ? (selectedFood.weight || 100) / 100
+                                : parseFloat(selectedAmount) / 100
+                              )
+                            )}
+                          </Text>
+                        </View>
+                        <View style={styles.previewRow}>
+                          <Text style={styles.previewLabel}>Protein:</Text>
+                          <Text style={styles.previewValue}>
+                            {(selectedFood.protein * 
+                              (useExactAmount 
+                                ? (selectedFood.weight || 100) / 100
+                                : parseFloat(selectedAmount) / 100
+                              )
+                            ).toFixed(1)}g
+                          </Text>
+                        </View>
+                      </View>
+
+                      {!useExactAmount && (
+                        <View style={styles.customAmountContainer}>
+                          <Text style={styles.label}>Custom amount (grams)</Text>
+                          <TextInput
+                            style={styles.input}
+                            value={selectedAmount}
+                            onChangeText={setSelectedAmount}
+                            placeholder="100"
+                            keyboardType="decimal-pad"
+                            placeholderTextColor={Palette.gray}
+                          />
+                        </View>
+                      )}
+
+                      <Pressable 
+                        style={styles.confirmButton}
+                        onPress={() => handleSavedFoodSelect(selectedFood)}
+                        hitSlop={10}>
+                        <Text style={styles.confirmButtonText}>✓ Add to Recipe</Text>
+                      </Pressable>
+                    </View>
+                  </View>
                 ) : (
                   <View>
                     <Text style={styles.label}>Select from your food history</Text>
@@ -288,11 +417,16 @@ export const IngredientSelector = React.memo(function IngredientSelector({
                           <Text style={styles.foodName}>{food.name}</Text>
                           <Text style={styles.foodNutrition}>
                             {Math.round(food.calories)} kcal • {Math.round(food.protein)}g protein
+                            {food.weight && ` • ${food.weight}g saved`}
                           </Text>
                         </View>
                         <Pressable
                           style={styles.selectButton}
-                          onPress={() => handleSavedFoodSelect(food)}
+                          onPress={() => {
+                            setSelectedFood(food);
+                            setSelectedAmount(String(food.weight || 100));
+                            setUseExactAmount(false);
+                          }}
                           hitSlop={10}>
                           <Text style={styles.selectButtonText}>+</Text>
                         </Pressable>
@@ -472,6 +606,102 @@ const styles = StyleSheet.create({
   selectButtonText: {
     color: '#fff',
     fontSize: 18,
+    fontWeight: '600',
+  },
+  selectedFoodCard: {
+    backgroundColor: Palette.lightGray2,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+  },
+  backButton: {
+    marginBottom: 12,
+  },
+  backButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Palette.primary,
+  },
+  selectedFoodName: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: Palette.darkGray,
+    marginBottom: 16,
+  },
+  portionModeTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Palette.darkGray,
+    marginBottom: 12,
+  },
+  portionButtonsContainer: {
+    gap: 10,
+    marginBottom: 16,
+  },
+  portionButton: {
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderWidth: 2,
+    borderColor: '#e8e8e8',
+    backgroundColor: '#fff',
+  },
+  portionButtonActive: {
+    borderColor: Palette.primary,
+    backgroundColor: Palette.primary,
+  },
+  portionButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Palette.darkGray,
+    marginBottom: 4,
+  },
+  portionButtonTextActive: {
+    color: '#fff',
+  },
+  portionButtonSubtext: {
+    fontSize: 12,
+    color: Palette.gray,
+  },
+  portionButtonSubtextActive: {
+    color: 'rgba(255,255,255,0.8)',
+  },
+  portionPreviewCard: {
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#e8e8e8',
+  },
+  previewRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  previewLabel: {
+    fontSize: 13,
+    color: Palette.gray,
+    fontWeight: '500',
+  },
+  previewValue: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Palette.darkGray,
+  },
+  customAmountContainer: {
+    marginBottom: 16,
+  },
+  confirmButton: {
+    backgroundColor: Palette.primary,
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  confirmButtonText: {
+    color: '#fff',
+    fontSize: 16,
     fontWeight: '600',
   },
 });

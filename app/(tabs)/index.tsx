@@ -13,6 +13,7 @@ import { feedback } from '@/utils/feedback';
 import { addIngredientToRecipe, Recipe } from '@/utils/recipes';
 import { STORAGE_KEYS } from '@/utils/storage';
 import { useFocusEffect } from '@react-navigation/native';
+import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
 import React, { useCallback, useMemo, useState } from 'react';
 import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -139,6 +140,12 @@ export default function HomeScreen() {
 
   const handleAddIngredient = useCallback(
     (ingredient: any) => {
+      // Haptic feedback
+      Haptics.selectionAsync();
+      
+      // Show success toast
+      feedback.success(`Added ${ingredient.name}!`);
+      
       setCurrentRecipe(recipe => {
         if (!recipe) return null;
         const updated = addIngredientToRecipe(recipe, ingredient);
