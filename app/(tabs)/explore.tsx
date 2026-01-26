@@ -72,7 +72,7 @@ export default function WorkoutHubScreen() {
       <ThemedView style={[styles.header, isDark && styles.headerDark, { paddingTop: Math.max(insets.top, 16) }]}>
         <ThemedText type="title" style={[styles.headerTitle, isDark && styles.headerTitleDark]}>Workout Hub</ThemedText>
         <Pressable style={styles.themeToggle} onPress={toggleTheme}>
-          <Text style={styles.themeToggleIcon}>{colorScheme === 'dark' ? '☀️' : colorScheme === 'light' ? '🌙' : '🌗'}</Text>
+          <Text style={styles.themeToggleIcon}>{colorScheme === 'dark' ? '🌙' : colorScheme === 'light' ? '☀️' : '🌗'}</Text>
         </Pressable>
       </ThemedView>
 

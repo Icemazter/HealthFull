@@ -226,7 +226,7 @@ export default function HomeScreen() {
       <ThemedView style={[styles.header, isDark && styles.headerDark, { paddingTop: Math.max(insets.top, 16) }]}>
         <ThemedText type="title" style={[styles.headerTitle, isDark && styles.headerTitleDark]}>Today's Nutrition</ThemedText>
         <Pressable style={styles.themeToggle} onPress={toggleTheme}>
-          <Text style={styles.themeToggleIcon}>{isDark ? '☀️' : '🌙'}</Text>
+          <Text style={styles.themeToggleIcon}>{isDark ? '🌙' : '☀️'}</Text>
         </Pressable>
       </ThemedView>
 

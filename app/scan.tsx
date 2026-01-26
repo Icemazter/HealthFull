@@ -164,7 +164,18 @@ export default function ScanScreen() {
 
     const grams = num * unitToGram[from];
     const converted = grams / unitToGram[to];
+    // If converted is whole number, return without decimals
+    if (Math.abs(converted - Math.round(converted)) < 1e-9) {
+      return String(Math.round(converted));
+    }
     return converted.toFixed(1);
+  };
+
+  const formatAmount = (value: string | number | undefined) => {
+    if (value === undefined || value === null) return '';
+    const num = typeof value === 'number' ? value : parseFloat(String(value));
+    if (isNaN(num)) return String(value);
+    return Number.isInteger(num) ? String(Math.round(num)) : String(num);
   };
 
   const animateMealChip = (meal: 'Breakfast' | 'Lunch' | 'Dinner' | 'Snack') => {
@@ -421,7 +432,7 @@ export default function ScanScreen() {
         };
 
         setFoodData(food);
-        setServingSize((food.servingSize || 100).toString());
+        setServingSize(formatAmount(food.servingSize || 100));
         setUnitType(productUnit); // Set initial unit based on product type
         setShowOptions(true);
       } else {
@@ -807,8 +818,8 @@ export default function ScanScreen() {
                         if (!isWeb) {
                           Haptics.selectionAsync();
                         }
-                        const converted = convertServingSize(servingSize, unitType, unit as 'g' | 'ml' | 'dl' | 'tbsp' | 'tsp');
-                        setServingSize(converted);
+                          const converted = convertServingSize(servingSize, unitType, unit as 'g' | 'ml' | 'dl' | 'tbsp' | 'tsp');
+                          setServingSize(converted);
                         setUnitType(unit as 'g' | 'ml' | 'dl' | 'tbsp' | 'tsp');
                       }}>
                       <Text style={[styles.unitButtonText, unitType === unit && styles.unitButtonTextActive]}>
@@ -830,7 +841,7 @@ export default function ScanScreen() {
                   <Text style={styles.servingSizeUnit}>{unitType}</Text>
                 </View>
                 <Text style={styles.servingSizeHint}>
-                  Each item: {servingSize || 100}{unitType}
+                  Each item: {formatAmount(servingSize) || 100}{unitType}
                 </Text>
               </View>
 

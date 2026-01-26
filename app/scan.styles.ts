@@ -415,7 +415,9 @@ export const scanStyles = StyleSheet.create({
   quantityInputRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 16,
+    justifyContent: 'space-between',
+    marginBottom: 12,
   },
   quantityButton: {
     width: 44,
@@ -431,7 +433,9 @@ export const scanStyles = StyleSheet.create({
     fontWeight: 'bold',
   },
   quantityInput: {
-    flex: 1,
+    width: '50%',
+    minWidth: 80,
+    maxWidth: 220,
     backgroundColor: Palette.white,
     padding: 12,
     borderRadius: 8,
@@ -464,11 +468,14 @@ export const scanStyles = StyleSheet.create({
   servingSizeInputRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 16,
     marginBottom: 12,
+    justifyContent: 'space-between',
   },
   servingSizeInput: {
-    width: 80,
+    width: '50%',
+    minWidth: 80,
+    maxWidth: 220,
     backgroundColor: '#f8f8f8',
     padding: 10,
     borderRadius: 10,

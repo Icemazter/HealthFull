@@ -206,7 +206,7 @@ export default function ProgressScreen() {
       <View style={[styles.header, isDark && styles.headerDark, { paddingTop: Math.max(insets.top, 16) }]}>
         <Text style={[styles.headerTitle, isDark && styles.headerTitleDark]}>Progress</Text>
         <Pressable style={styles.themeToggle} onPress={toggleTheme}>
-          <Text style={styles.themeToggleIcon}>{colorScheme === 'dark' ? '☀️' : colorScheme === 'light' ? '🌙' : '🌗'}</Text>
+          <Text style={styles.themeToggleIcon}>{colorScheme === 'dark' ? '🌙' : colorScheme === 'light' ? '☀️' : '🌗'}</Text>
         </Pressable>
       </View>
 
