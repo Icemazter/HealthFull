@@ -731,6 +731,10 @@ export default function ScanScreen() {
                     style={[styles.productImage, { opacity: imageLoaded ? 1 : 0 }]}
                     resizeMode="cover"
                     onLoad={() => setImageLoaded(true)}
+                    onError={() => {
+                      console.error('⚠️ Failed to load product image');
+                      setImageLoaded(true); // Still show UI even if image fails
+                    }}
                   />
                   {imageLoaded && (
                     <>
@@ -891,6 +895,9 @@ export default function ScanScreen() {
                 source={{ uri: foodData.imageUrl }} 
                 style={styles.enlargedImage}
                 resizeMode="contain"
+                onError={() => {
+                  console.error('⚠️ Failed to load enlarged product image');
+                }}
               />
             )}
             <Text style={styles.closeText}>Tap anywhere to close</Text>

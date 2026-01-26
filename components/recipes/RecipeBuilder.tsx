@@ -1,7 +1,8 @@
 import { Palette } from '@/constants/theme';
-import { Recipe } from '@/utils/recipes';
-import React, { useState } from 'react';
+import { Recipe, removeIngredientFromRecipe } from '@/utils/recipes';
+import React, { useEffect, useState } from 'react';
 import {
+    Alert,
     Modal,
     Pressable,
     ScrollView,
@@ -29,17 +30,49 @@ export const RecipeBuilder = React.memo(function RecipeBuilder({
 }: RecipeBuilderProps) {
   const insets = useSafeAreaInsets();
   const [recipeName, setRecipeName] = useState(recipe.name);
+  const [currentRecipe, setCurrentRecipe] = useState(recipe);
+
+  // Sync recipe name when recipe prop changes or modal opens/closes
+  useEffect(() => {
+    setRecipeName(recipe.name);
+    setCurrentRecipe(recipe);
+  }, [recipe, visible]);
+
+  const handleDeleteIngredient = (ingredientId: string) => {
+    Alert.alert(
+      'Remove Ingredient',
+      'Are you sure you want to remove this ingredient?',
+      [
+        { text: 'Cancel', onPress: () => {}, style: 'cancel' },
+        {
+          text: 'Remove',
+          onPress: () => {
+            const updated = removeIngredientFromRecipe(currentRecipe, ingredientId);
+            setCurrentRecipe(updated);
+          },
+          style: 'destructive',
+        },
+      ]
+    );
+  };
 
   const handleSave = () => {
     if (!recipeName.trim()) {
       alert('Please enter a recipe name');
       return;
     }
-    const updated = { ...recipe, name: recipeName.trim() };
+    const updated = { ...currentRecipe, name: recipeName.trim() };
     onSave(updated);
   };
 
-  const totalNutrition = recipe.ingredients.reduce(
+  const handleCancel = () => {
+    // Reset all state to match current recipe
+    setRecipeName(recipe.name);
+    setCurrentRecipe(recipe);
+    onCancel();
+  };
+
+  const totalNutrition = currentRecipe.ingredients.reduce(
     (sum, ing) => ({
       calories: sum.calories + ing.calories,
       protein: sum.protein + ing.protein,
@@ -50,43 +83,56 @@ export const RecipeBuilder = React.memo(function RecipeBuilder({
     { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 }
   );
 
+  // Sort ingredients by name for better UX
+  const sortedIngredients = [...currentRecipe.ingredients].sort((a, b) =>
+    a.name.localeCompare(b.name)
+  );
+
   return (
     <Modal visible={visible} animationType="slide" transparent={false}>
       <View style={[styles.container, { paddingTop: insets.top }]}>
         <View style={styles.header}>
-          <Pressable onPress={onCancel} hitSlop={10}>
+          <Pressable onPress={handleCancel} hitSlop={10} accessibilityLabel="Close recipe builder">
             <Text style={styles.cancelButton}>✕</Text>
           </Pressable>
           <Text style={styles.headerTitle}>Build Recipe</Text>
-          <Pressable style={styles.saveButton} onPress={handleSave} hitSlop={10}>
+          <Pressable style={styles.saveButton} onPress={handleSave} hitSlop={10} accessibilityLabel="Save recipe">
             <Text style={styles.saveButtonText}>Save</Text>
           </Pressable>
         </View>
 
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-          <Text style={styles.label}>Recipe Name</Text>
+          <View style={styles.labelRow}>
+            <Text style={styles.label}>Recipe Name</Text>
+            <Text style={styles.charCount}>{recipeName.length}/50</Text>
+          </View>
           <TextInput
             style={styles.input}
             value={recipeName}
-            onChangeText={setRecipeName}
+            onChangeText={(text) => {
+              if (text.length <= 50) {
+                setRecipeName(text);
+              }
+            }}
             placeholder="e.g., Meal Prep Chicken Bowl"
             placeholderTextColor="#b3b3b3"
             autoCapitalize="words"
+            maxLength={50}
           />
 
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Ingredients ({recipe.ingredients.length})</Text>
-                <Pressable style={styles.addIngredientBtn} onPress={onAddIngredientPressed} hitSlop={8}>
+                <Text style={styles.sectionTitle}>Ingredients ({currentRecipe.ingredients.length})</Text>
+                <Pressable style={styles.addIngredientBtn} onPress={onAddIngredientPressed} hitSlop={8} accessibilityLabel="Add ingredient to recipe">
                   <Text style={styles.addIngredientText}>+ Add</Text>
                 </Pressable>
               </View>
 
-              {recipe.ingredients.length === 0 ? (
+              {currentRecipe.ingredients.length === 0 ? (
                 <Text style={styles.emptyIngredients}>No ingredients yet</Text>
               ) : (
                 <View style={styles.ingredientsList}>
-                  {recipe.ingredients.map((ingredient) => (
+                  {sortedIngredients.map((ingredient) => (
                     <View key={ingredient.id} style={styles.ingredientItem}>
                       <View style={styles.ingredientInfo}>
                         <Text style={styles.ingredientName}>{ingredient.name}</Text>
@@ -97,13 +143,20 @@ export const RecipeBuilder = React.memo(function RecipeBuilder({
                           {Math.round(ingredient.calories)} kcal
                         </Text>
                       </View>
+                      <Pressable
+                        style={styles.deleteIngredientBtn}
+                        onPress={() => handleDeleteIngredient(ingredient.id)}
+                        hitSlop={8}
+                        accessibilityLabel={`Delete ${ingredient.name}`}>
+                        <Text style={styles.deleteIngredientText}>✕</Text>
+                      </Pressable>
                     </View>
                   ))}
                 </View>
               )}
             </View>
 
-            {recipe.ingredients.length > 0 && (
+            {currentRecipe.ingredients.length > 0 && (
               <View style={styles.nutritionSummary}>
                 <Text style={styles.summaryTitle}>Total Nutrition</Text>
                 <View style={styles.nutritionGrid}>
@@ -125,7 +178,7 @@ export const RecipeBuilder = React.memo(function RecipeBuilder({
                   </View>
                 </View>
                 <Text style={styles.totalWeight}>
-                  Total Weight: {recipe.totalWeightInGrams}g
+                  Total Weight: {currentRecipe.totalWeightInGrams}g
                 </Text>
               </View>
             )}
@@ -180,6 +233,17 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Palette.darkGray,
     marginBottom: 8,
+  },
+  labelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  charCount: {
+    fontSize: 12,
+    color: Palette.gray,
+    fontWeight: '500',
   },
   input: {
     backgroundColor: Palette.lightGray2,
@@ -249,6 +313,20 @@ const styles = StyleSheet.create({
   },
   ingredientNutrition: {
     paddingLeft: 12,
+  },
+  deleteIngredientBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#ffebee',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 12,
+  },
+  deleteIngredientText: {
+    color: '#c62828',
+    fontSize: 16,
+    fontWeight: '600',
   },
   nutritionSummary: {
     backgroundColor: Palette.primary,

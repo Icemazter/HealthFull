@@ -113,4 +113,5 @@ export const STORAGE_KEYS = {
   RECIPES: 'recipes',
   HEVY_API_KEY: 'hevy_api_key',
   CUSTOM_EXERCISES: 'custom_exercises',
+  LAST_INGREDIENT_WEIGHT: 'last_ingredient_weight',
 } as const;

@@ -51,10 +51,12 @@ export const IngredientSelector = React.memo(function IngredientSelector({
   const [selectedAmount, setSelectedAmount] = useState('100');
   const [useExactAmount, setUseExactAmount] = useState(false);
   const [selectedFood, setSelectedFood] = useState<SavedFood | null>(null);
+  const [loadingSavedFoods, setLoadingSavedFoods] = useState(false);
 
   React.useEffect(() => {
     if (visible) {
       checkForScannedIngredient();
+      loadLastWeight();
       if (activeTab === 'saved') {
         loadSavedFoods();
       }
@@ -77,6 +79,7 @@ export const IngredientSelector = React.memo(function IngredientSelector({
 
   const loadSavedFoods = async () => {
     try {
+      setLoadingSavedFoods(true);
       const entries = await storage.get<any[]>(STORAGE_KEYS.FOOD_ENTRIES, []);
       if (entries) {
         // Group by unique food names and preserve weight info
@@ -99,6 +102,32 @@ export const IngredientSelector = React.memo(function IngredientSelector({
       }
     } catch (error) {
       console.error('Error loading saved foods:', error);
+      Alert.alert('Error', 'Failed to load saved foods');
+    } finally {
+      setLoadingSavedFoods(false);
+    }
+  };
+
+  const loadLastWeight = async () => {
+    try {
+      const lastWeight = await storage.get<string>(
+        STORAGE_KEYS.LAST_INGREDIENT_WEIGHT,
+        '100'
+      );
+      if (lastWeight) {
+        setManualWeight(lastWeight);
+        setSelectedAmount(lastWeight);
+      }
+    } catch (error) {
+      console.error('Error loading last weight:', error);
+    }
+  };
+
+  const persistWeight = async (weight: string) => {
+    try {
+      await storage.set(STORAGE_KEYS.LAST_INGREDIENT_WEIGHT, weight);
+    } catch (error) {
+      console.error('Error persisting weight:', error);
     }
   };
 
@@ -108,18 +137,32 @@ export const IngredientSelector = React.memo(function IngredientSelector({
       return;
     }
 
+    const calories = parseFloat(manualCalories) || 0;
+    const weight = parseFloat(manualWeight) || 0;
+
+    if (calories <= 0) {
+      Alert.alert('Validation Error', 'Please enter calories greater than 0');
+      return;
+    }
+
+    if (weight <= 0) {
+      Alert.alert('Validation Error', 'Please enter weight greater than 0g');
+      return;
+    }
+
     const ingredient: RecipeIngredient = {
-      id: `ing_${Date.now()}`,
+      id: `ing_${Date.now()}_${Math.random()}`,
       name: manualName.trim(),
-      calories: parseFloat(manualCalories) || 0,
-      protein: parseFloat(manualProtein) || 0,
-      carbs: parseFloat(manualCarbs) || 0,
-      fat: parseFloat(manualFat) || 0,
-      fiber: parseFloat(manualFiber) || 0,
-      weightInGrams: parseFloat(manualWeight) || 100,
+      calories: parseFloat(calories.toFixed(2)),
+      protein: parseFloat((parseFloat(manualProtein) || 0).toFixed(2)),
+      carbs: parseFloat((parseFloat(manualCarbs) || 0).toFixed(2)),
+      fat: parseFloat((parseFloat(manualFat) || 0).toFixed(2)),
+      fiber: parseFloat((parseFloat(manualFiber) || 0).toFixed(2)),
+      weightInGrams: parseFloat(weight.toFixed(2)),
     };
 
     onSelect(ingredient);
+    persistWeight(manualWeight);
     resetManualForm();
   };
 
@@ -130,17 +173,18 @@ export const IngredientSelector = React.memo(function IngredientSelector({
     const multiplier = weight / 100;
 
     const ingredient: RecipeIngredient = {
-      id: `ing_${Date.now()}`,
+      id: `ing_${Date.now()}_${Math.random()}`,
       name: food.name,
-      calories: food.calories * multiplier,
-      protein: food.protein * multiplier,
-      carbs: food.carbs * multiplier,
-      fat: food.fat * multiplier,
-      fiber: food.fiber * multiplier,
+      calories: parseFloat((food.calories * multiplier).toFixed(2)),
+      protein: parseFloat((food.protein * multiplier).toFixed(2)),
+      carbs: parseFloat((food.carbs * multiplier).toFixed(2)),
+      fat: parseFloat((food.fat * multiplier).toFixed(2)),
+      fiber: parseFloat((food.fiber * multiplier).toFixed(2)),
       weightInGrams: weight,
     };
 
     onSelect(ingredient);
+    persistWeight(String(weight));
     resetManualForm();
     setSelectedFood(null);
   };
@@ -160,7 +204,7 @@ export const IngredientSelector = React.memo(function IngredientSelector({
     <Modal visible={visible} animationType="slide" transparent={false}>
       <View style={[styles.container, { paddingTop: insets.top }]}>
         <View style={styles.header}>
-          <Pressable onPress={onCancel} hitSlop={10}>
+          <Pressable onPress={onCancel} hitSlop={10} accessibilityLabel="Close ingredient selector">
             <Text style={styles.closeButton}>✕</Text>
           </Pressable>
           <Text style={styles.headerTitle}>Add Ingredient</Text>
@@ -173,7 +217,8 @@ export const IngredientSelector = React.memo(function IngredientSelector({
               key={tab}
               style={[styles.tab, activeTab === tab && styles.tabActive]}
               onPress={() => setActiveTab(tab)}
-              hitSlop={8}>
+              hitSlop={8}
+              accessibilityLabel={`${tab === 'scan' ? 'Scan' : tab === 'manual' ? 'Manual entry' : 'Saved foods'} tab`}>
               <Text
                 style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>
                 {tab === 'scan' && '📷 Scan'}
@@ -191,7 +236,8 @@ export const IngredientSelector = React.memo(function IngredientSelector({
                 <Pressable 
                   style={styles.scanButton} 
                   onPress={onScanPressed}
-                  hitSlop={10}>
+                  hitSlop={10}
+                  accessibilityLabel="Open camera to scan barcode">
                   <Text style={styles.scanButtonText}>📷 Open Camera</Text>
                 </Pressable>
               </View>
@@ -287,7 +333,8 @@ export const IngredientSelector = React.memo(function IngredientSelector({
                 <Pressable 
                   style={styles.submitButton} 
                   onPress={handleManualSubmit}
-                  hitSlop={10}>
+                  hitSlop={10}
+                  accessibilityLabel="Add manual ingredient">
                   <Text style={styles.submitButtonText}>✓ Add Ingredient</Text>
                 </Pressable>
               </View>
@@ -295,7 +342,9 @@ export const IngredientSelector = React.memo(function IngredientSelector({
 
             {activeTab === 'saved' && (
               <View style={styles.section}>
-                {savedFoods.length === 0 ? (
+                {loadingSavedFoods ? (
+                  <Text style={styles.emptyText}>Loading your food history...</Text>
+                ) : savedFoods.length === 0 ? (
                   <Text style={styles.emptyText}>No saved foods yet. Scan some foods first!</Text>
                 ) : selectedFood ? (
                   <View>
