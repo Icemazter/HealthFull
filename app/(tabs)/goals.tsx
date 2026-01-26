@@ -12,6 +12,7 @@ interface Goals {
   carbs: string;
   fat: string;
   fiber: string;
+  fatMethod?: 'weight' | 'calories';
 }
 
 interface WeightEntry {
@@ -52,7 +53,10 @@ export default function GoalsScreen() {
   const [colorScheme, setColorScheme] = usePersistedState<'light' | 'dark' | null>(STORAGE_KEYS.DARK_MODE, null);
   const isDark = colorScheme === 'dark' || (colorScheme === null && systemColorScheme === 'dark');
   
-  const [goals, setGoals] = usePersistedState<Goals>(STORAGE_KEYS.MACRO_GOALS, { calories: '2000', protein: '150', carbs: '200', fat: '65', fiber: '30' });
+  const [goals, setGoals] = usePersistedState<Goals>(
+    STORAGE_KEYS.MACRO_GOALS,
+    { calories: '2000', protein: '150', carbs: '200', fat: '65', fiber: '30', fatMethod: 'calories' }
+  );
   const [stats, setStats] = usePersistedState<BodyStats>(STORAGE_KEYS.BODY_STATS, {
     heightCm: '175',
     weightKg: '75',
@@ -184,11 +188,23 @@ export default function GoalsScreen() {
 
     const protein = Math.round(proteinPerKg * weightKg);
     
-    // Fat: 0.8-1.0g per kg for hormonal health
-    const fat = Math.round(0.9 * weightKg);
-    
-    // Carbs: remaining calories
-    const carbCalories = calories - (protein * 4) - (fat * 9);
+    // Fat: allow two methods - by weight (g/kg) or by calories (% of energy) with a minimum by weight
+    const fatMethod = (goals && (goals as any).fatMethod) || 'calories';
+    let fatGrams: number;
+    if (fatMethod === 'weight') {
+      // Preserve previous behavior when user prefers weight-based fat
+      fatGrams = Math.round(0.9 * weightKg);
+    } else {
+      // Default: calculate as percent of total calories, but enforce a minimum per-kg floor
+      const fatPercent = stats.goal === 'Gain Muscle' ? 0.30 : 0.25; // gain needs slightly more fat
+      const fatCalories = Math.round(calories * fatPercent);
+      const fatFromCalories = Math.round(fatCalories / 9);
+      const minFatKg = Math.round(0.8 * weightKg); // minimum grams per kg
+      fatGrams = Math.max(minFatKg, fatFromCalories);
+    }
+
+    // Carbs: remaining calories after protein and fat
+    const carbCalories = calories - (protein * 4) - (fatGrams * 9);
     const carbs = Math.max(0, Math.round(carbCalories / 4));
 
     // Fiber: ~14g per 1000 kcal (Dietary Guidelines), clamp to a sensible range
@@ -322,6 +338,24 @@ export default function GoalsScreen() {
             placeholder="65"
             placeholderTextColor={isDark ? '#666' : '#999'}
           />
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={[styles.label, isDark && styles.labelDark]}>Fat Calculation</Text>
+          <View style={styles.chipRow}>
+            <Pressable
+              style={[styles.chip, isDark && styles.chipDark, goals.fatMethod === 'weight' && styles.chipActive]}
+              onPress={() => setGoals({ ...goals, fatMethod: 'weight' as const })}
+            >
+              <Text style={[styles.chipText, isDark && styles.chipTextDark, goals.fatMethod === 'weight' && styles.chipTextActive]}>By weight (g/kg)</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.chip, isDark && styles.chipDark, goals.fatMethod === 'calories' && styles.chipActive]}
+              onPress={() => setGoals({ ...goals, fatMethod: 'calories' as const })}
+            >
+              <Text style={[styles.chipText, isDark && styles.chipTextDark, goals.fatMethod === 'calories' && styles.chipTextActive]}>By calories (%)</Text>
+            </Pressable>
+          </View>
         </View>
 
         <View style={styles.inputGroup}>

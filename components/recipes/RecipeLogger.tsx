@@ -287,6 +287,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
     paddingHorizontal: 4,
+    flexWrap: 'nowrap',
   },
   portionInput: {
     flex: 1,
@@ -302,6 +303,10 @@ const styles = StyleSheet.create({
   portionMax: {
     fontSize: 12,
     color: Palette.gray,
+    minWidth: 56,
+    textAlign: 'right',
+    marginLeft: 8,
+    flexShrink: 0,
   },
   nutritionSection: {
     backgroundColor: Palette.primary,

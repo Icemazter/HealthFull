@@ -103,12 +103,17 @@ const styles = StyleSheet.create({
     color: Palette.gray,
     fontSize: 14,
     fontWeight: '500',
+    minWidth: 48,
+    textAlign: 'right',
+    marginLeft: 8,
+    flexShrink: 0,
   },
   unitSelector: {
     flexDirection: 'row',
     gap: 6,
     flexWrap: 'wrap',
-    flex: 1,
+    flexShrink: 0,
+    minWidth: 96,
     paddingRight: 4,
   },
   unitButton: {
