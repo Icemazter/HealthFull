@@ -468,9 +468,9 @@ export const scanStyles = StyleSheet.create({
     marginBottom: 12,
   },
   servingSizeInput: {
-    flex: 1,
+    width: 80,
     backgroundColor: '#f8f8f8',
-    padding: 13,
+    padding: 10,
     borderRadius: 10,
     fontSize: 17,
     textAlign: 'center',
