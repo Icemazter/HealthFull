@@ -53,12 +53,19 @@
   <!-- Outer subtle rim -->
   <rect x="84" y="84" width="856" height="856" rx="176" stroke="#3B4A6A" stroke-opacity="0.25" stroke-width="8" fill="none"/>
 
-  <!-- Heart arcs -->
-  <g filter="url(#softShadow)">
-    <path d="M322 282 C250 330 212 414 220 492" fill="none" stroke="url(#arcTeal)" stroke-width="48" stroke-linecap="round"/>
-    <path d="M702 282 C774 330 812 414 804 492" fill="none" stroke="url(#arcCoral)" stroke-width="48" stroke-linecap="round"/>
-    <path d="M756 534 C740 626 666 700 568 728" fill="none" stroke="url(#arcCream)" stroke-width="48" stroke-linecap="round"/>
-    <path d="M268 586 C284 680 356 748 452 772" fill="none" stroke="url(#arcBlue)" stroke-width="48" stroke-linecap="round"/>
+  <!-- Segmented ring: 4 colored arcs -->
+
+  <!-- Segmented ring: 4 colored arcs -->
+  <!-- Segmented ring: 4 colored arcs, hollow with border glow only -->
+  <g>
+    <!-- Teal: Top (hollow, glow) -->
+    <path d="M512 180 A332 332 0 0 1 844 512" stroke="url(#arcTeal)" stroke-width="36" fill="none" filter="url(#glowTeal)"/>
+    <!-- Coral: Right (hollow, glow) -->
+    <path d="M844 512 A332 332 0 0 1 512 844" stroke="url(#arcCoral)" stroke-width="36" fill="none" filter="url(#glowCoral)"/>
+    <!-- Cream: Bottom (hollow, glow) -->
+    <path d="M512 844 A332 332 0 0 1 180 512" stroke="url(#arcCream)" stroke-width="36" fill="none" filter="url(#glowCream)"/>
+    <!-- Blue: Left (hollow, glow) -->
+    <path d="M180 512 A332 332 0 0 1 512 180" stroke="url(#arcBlue)" stroke-width="36" fill="none" filter="url(#glowBlue)"/>
   </g>
 
   <!-- Dumbbell center -->
