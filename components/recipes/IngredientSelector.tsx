@@ -205,7 +205,7 @@ export const IngredientSelector = React.memo(function IngredientSelector({
                   value={manualName}
                   onChangeText={setManualName}
                   placeholder="e.g., Chicken Breast"
-                  placeholderTextColor={Palette.gray}
+                  placeholderTextColor="#b3b3b3"
                 />
 
                 <Text style={styles.label}>Weight (grams)</Text>
@@ -215,7 +215,7 @@ export const IngredientSelector = React.memo(function IngredientSelector({
                   onChangeText={setManualWeight}
                   placeholder="100"
                   keyboardType="decimal-pad"
-                  placeholderTextColor={Palette.gray}
+                  placeholderTextColor="#b3b3b3"
                 />
 
                 <Text style={styles.sublabel}>Per 100g nutrition facts:</Text>
@@ -229,7 +229,7 @@ export const IngredientSelector = React.memo(function IngredientSelector({
                       onChangeText={setManualCalories}
                       placeholder="0"
                       keyboardType="decimal-pad"
-                      placeholderTextColor={Palette.gray}
+                      placeholderTextColor="#b3b3b3"
                     />
                   </View>
                   <View style={styles.col}>
@@ -240,7 +240,7 @@ export const IngredientSelector = React.memo(function IngredientSelector({
                       onChangeText={setManualProtein}
                       placeholder="0"
                       keyboardType="decimal-pad"
-                      placeholderTextColor={Palette.gray}
+                      placeholderTextColor="#b3b3b3"
                     />
                   </View>
                 </View>
@@ -254,7 +254,7 @@ export const IngredientSelector = React.memo(function IngredientSelector({
                       onChangeText={setManualCarbs}
                       placeholder="0"
                       keyboardType="decimal-pad"
-                      placeholderTextColor={Palette.gray}
+                      placeholderTextColor="#b3b3b3"
                     />
                   </View>
                   <View style={styles.col}>
@@ -265,7 +265,7 @@ export const IngredientSelector = React.memo(function IngredientSelector({
                       onChangeText={setManualFat}
                       placeholder="0"
                       keyboardType="decimal-pad"
-                      placeholderTextColor={Palette.gray}
+                      placeholderTextColor="#b3b3b3"
                     />
                   </View>
                 </View>
@@ -279,7 +279,7 @@ export const IngredientSelector = React.memo(function IngredientSelector({
                       onChangeText={setManualFiber}
                       placeholder="0"
                       keyboardType="decimal-pad"
-                      placeholderTextColor={Palette.gray}
+                      placeholderTextColor="#b3b3b3"
                     />
                   </View>
                 </View>
@@ -395,7 +395,7 @@ export const IngredientSelector = React.memo(function IngredientSelector({
                             onChangeText={setSelectedAmount}
                             placeholder="100"
                             keyboardType="decimal-pad"
-                            placeholderTextColor={Palette.gray}
+                            placeholderTextColor="#b3b3b3"
                           />
                         </View>
                       )}
