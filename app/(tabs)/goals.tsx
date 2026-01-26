@@ -214,7 +214,7 @@ export default function GoalsScreen() {
       calories: Math.round(calories).toString(),
       protein: protein.toString(),
       carbs: carbs.toString(),
-      fat: fat.toString(),
+      fat: fatGrams.toString(),
       fiber: fiber.toString(),
     };
     
@@ -229,7 +229,7 @@ export default function GoalsScreen() {
       `🔥 Calories: ${Math.round(calories)} kcal\n` +
       `🥩 Protein: ${protein}g (${proteinPerKg}g/kg)\n` +
       `🍞 Carbs: ${carbs}g\n` +
-      `🥑 Fat: ${fat}g (0.9g/kg)\n` +
+      `🥑 Fat: ${fatGrams}g (${fatMethod === 'weight' ? 'by weight' : 'by calories'})\n` +
       `🥦 Fiber: ${fiber}g (~14g/1000 kcal)\n\n` +
       `Goals automatically saved to nutrition tracker!`;
     
@@ -356,6 +356,9 @@ export default function GoalsScreen() {
               <Text style={[styles.chipText, isDark && styles.chipTextDark, goals.fatMethod === 'calories' && styles.chipTextActive]}>By calories (%)</Text>
             </Pressable>
           </View>
+          <Text style={[styles.activityHint, isDark && styles.activityHintDark]}>
+            Fat is calculated as % of energy (25% default, 30% when bulking) with a safe minimum of 0.8 g/kg to protect health. Switch to “By weight” if you prefer a fixed g/kg target.
+          </Text>
         </View>
 
         <View style={styles.inputGroup}>
