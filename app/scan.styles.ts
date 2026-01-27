@@ -469,6 +469,7 @@ export const scanStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 16,
+    marginTop: 12,
     marginBottom: 12,
     justifyContent: 'space-between',
   },
@@ -522,6 +523,7 @@ export const scanStyles = StyleSheet.create({
   },
   amountSection: {
     marginBottom: 0,
+    paddingBottom: 12,
   },
   dividerLine: {
     height: 1,
@@ -652,9 +654,9 @@ export const scanStyles = StyleSheet.create({
   // Unit selector - Enhanced with better visual feedback
   unitSelector: {
     flexDirection: 'row',
-    gap: 6,
+    gap: 10,
     marginTop: 0,
-    marginBottom: 12,
+    marginBottom: 18,
     alignItems: 'center',
   },
   unitButton: {
