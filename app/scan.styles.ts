@@ -653,8 +653,9 @@ export const scanStyles = StyleSheet.create({
   unitSelector: {
     flexDirection: 'row',
     gap: 6,
-    marginTop: 2,
-    marginBottom: -8, // pull the following input row up slightly so unit aligns better
+    marginTop: 0,
+    marginBottom: 12,
+    alignItems: 'center',
   },
   unitButton: {
     paddingHorizontal: 11,
