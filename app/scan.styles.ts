@@ -94,9 +94,6 @@ export const scanStyles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: 'transparent',
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.5)',
-    borderRadius: 12,
   },
   scanOverlay: {
     position: 'absolute',

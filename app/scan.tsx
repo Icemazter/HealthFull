@@ -608,16 +608,7 @@ export default function ScanScreen() {
               </Pressable>
             )}
             
-            <Pressable
-              style={styles.cancelButton}
-              onPress={() => {
-                if (!isWeb) {
-                  Haptics.selectionAsync();
-                }
-                router.back();
-              }}>
-              <Text style={styles.cancelText}>✕ Cancel</Text>
-            </Pressable>
+            
           </View>
         </View>
       ) : (
@@ -655,16 +646,7 @@ export default function ScanScreen() {
             {loading && <Text style={[styles.loadingText, { fontSize: 14 }]}>Finding nutrition info...</Text>}
             
             <View style={{ flexDirection: 'row', gap: 10, marginHorizontal: 20, marginBottom: 10 }}>
-              <Pressable
-                style={[styles.cancelButton, { flex: 1 }]}
-                onPress={() => {
-                  if (!isWeb) {
-                    Haptics.selectionAsync();
-                  }
-                  router.back();
-                }}>
-                <Text style={styles.cancelText}>✕ Cancel</Text>
-              </Pressable>
+              
               <Pressable
                 style={[styles.footerButton, styles.footerPrimaryButton, { flex: 1 }]}
                 onPress={() => setShowManualEntry(true)}>
@@ -806,49 +788,9 @@ export default function ScanScreen() {
               </View>
             </View>
 
-            <View style={styles.unifiedAmountContainer}>
+            {isRecipeMode ? (
               <View style={styles.amountSection}>
-                <Text style={styles.quantityLabel}>⚖️ Serving Size per Item</Text>
-                <View style={styles.unitSelector}>
-                  {['g', 'ml', 'dl', 'tbsp', 'tsp'].map((unit) => (
-                    <Pressable
-                      key={unit}
-                      style={[styles.unitButton, unitType === unit && styles.unitButtonActive]}
-                      onPress={() => {
-                        if (!isWeb) {
-                          Haptics.selectionAsync();
-                        }
-                          const converted = convertServingSize(servingSize, unitType, unit as 'g' | 'ml' | 'dl' | 'tbsp' | 'tsp');
-                          setServingSize(converted);
-                        setUnitType(unit as 'g' | 'ml' | 'dl' | 'tbsp' | 'tsp');
-                      }}>
-                      <Text style={[styles.unitButtonText, unitType === unit && styles.unitButtonTextActive]}>
-                        {unit}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
-                <View style={styles.servingSizeInputRow}>
-                  <TextInput
-                    style={styles.servingSizeInput}
-                    value={servingSize}
-                    onChangeText={setServingSize}
-                    onSubmitEditing={(e) => setServingSize(e.nativeEvent.text || servingSize)}
-                    keyboardType="decimal-pad"
-                    placeholder="100"
-                    placeholderTextColor="#999"
-                  />
-                  <Text style={styles.servingSizeUnit}>{unitType}</Text>
-                </View>
-                <Text style={styles.servingSizeHint}>
-                  Each item: {formatAmount(servingSize) || 100}{unitType}
-                </Text>
-              </View>
-
-              <View style={styles.dividerLine} />
-
-              <View style={styles.amountSection}>
-                <Text style={styles.quantityLabel}>🔢 Total Amount Consumed</Text>
+                <Text style={styles.quantityLabel}>🔢 Total Amount Added</Text>
                 <View style={styles.quantityInputRow}>
                   <TextInput
                     style={styles.quantityInput}
@@ -862,10 +804,71 @@ export default function ScanScreen() {
                   <Text style={styles.servingSizeUnit}>{unitType}</Text>
                 </View>
                 <Text style={styles.servingSizeHint}>
-                  Total you consumed
+                  Total added to recipe
                 </Text>
               </View>
-            </View>
+            ) : (
+              <View style={styles.unifiedAmountContainer}>
+                <View style={styles.amountSection}>
+                  <Text style={styles.quantityLabel}>⚖️ Serving Size per Item</Text>
+                  <View style={styles.unitSelector}>
+                    {['g', 'ml', 'dl', 'tbsp', 'tsp'].map((unit) => (
+                      <Pressable
+                        key={unit}
+                        style={[styles.unitButton, unitType === unit && styles.unitButtonActive]}
+                        onPress={() => {
+                          if (!isWeb) {
+                            Haptics.selectionAsync();
+                          }
+                            const converted = convertServingSize(servingSize, unitType, unit as 'g' | 'ml' | 'dl' | 'tbsp' | 'tsp');
+                            setServingSize(converted);
+                          setUnitType(unit as 'g' | 'ml' | 'dl' | 'tbsp' | 'tsp');
+                        }}>
+                        <Text style={[styles.unitButtonText, unitType === unit && styles.unitButtonTextActive]}>
+                          {unit}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                  <View style={styles.servingSizeInputRow}>
+                    <TextInput
+                      style={styles.servingSizeInput}
+                      value={servingSize}
+                      onChangeText={setServingSize}
+                      onSubmitEditing={(e) => setServingSize(e.nativeEvent.text || servingSize)}
+                      keyboardType="decimal-pad"
+                      placeholder="100"
+                      placeholderTextColor="#999"
+                    />
+                    <Text style={styles.servingSizeUnit}>{unitType}</Text>
+                  </View>
+                  <Text style={styles.servingSizeHint}>
+                    Each item: {formatAmount(servingSize) || 100}{unitType}
+                  </Text>
+                </View>
+
+                <View style={styles.dividerLine} />
+
+                <View style={styles.amountSection}>
+                  <Text style={styles.quantityLabel}>🔢 Total Amount Consumed</Text>
+                  <View style={styles.quantityInputRow}>
+                    <TextInput
+                      style={styles.quantityInput}
+                      value={customAmount}
+                      onChangeText={setCustomAmount}
+                      onSubmitEditing={(e) => setCustomAmount(e.nativeEvent.text || customAmount)}
+                      keyboardType="decimal-pad"
+                      placeholder="100"
+                      placeholderTextColor="#999"
+                    />
+                    <Text style={styles.servingSizeUnit}>{unitType}</Text>
+                  </View>
+                  <Text style={styles.servingSizeHint}>
+                    Total you consumed
+                  </Text>
+                </View>
+              </View>
+            )}
 
             <Animated.View style={[{ transform: [{ scale: celebrationScale }] }]}>
               <Pressable 
@@ -875,7 +878,9 @@ export default function ScanScreen() {
                   handleCustomAmount();
                 }}>
                 <Text style={styles.optionButtonText}>
-                  ✓ Add {customAmount || '100'}{unitType}
+                  {isRecipeMode
+                    ? `✓ Add ${customAmount || '100'}${unitType} to Recipe`
+                    : `✓ Add ${customAmount || '100'}${unitType}`}
                 </Text>
               </Pressable>
             </Animated.View>

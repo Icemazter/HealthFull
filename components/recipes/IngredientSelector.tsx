@@ -56,7 +56,6 @@ export const IngredientSelector = React.memo(function IngredientSelector({
   React.useEffect(() => {
     if (visible) {
       checkForScannedIngredient();
-      loadLastWeight();
       if (activeTab === 'saved') {
         loadSavedFoods();
       }
@@ -108,21 +107,6 @@ export const IngredientSelector = React.memo(function IngredientSelector({
     }
   };
 
-  const loadLastWeight = async () => {
-    try {
-      const lastWeight = await storage.get<string>(
-        STORAGE_KEYS.LAST_INGREDIENT_WEIGHT,
-        '100'
-      );
-      if (lastWeight) {
-        setManualWeight(lastWeight);
-        setSelectedAmount(lastWeight);
-      }
-    } catch (error) {
-      console.error('Error loading last weight:', error);
-    }
-  };
-
   const persistWeight = async (weight: string) => {
     try {
       await storage.set(STORAGE_KEYS.LAST_INGREDIENT_WEIGHT, weight);
@@ -164,6 +148,7 @@ export const IngredientSelector = React.memo(function IngredientSelector({
     onSelect(ingredient);
     persistWeight(manualWeight);
     resetManualForm();
+    onCancel(); // Close the selector to return to recipe builder
   };
 
   const handleSavedFoodSelect = (food: SavedFood) => {
@@ -187,6 +172,7 @@ export const IngredientSelector = React.memo(function IngredientSelector({
     persistWeight(String(weight));
     resetManualForm();
     setSelectedFood(null);
+    onCancel(); // Close the selector to return to recipe builder
   };
 
   const resetManualForm = () => {

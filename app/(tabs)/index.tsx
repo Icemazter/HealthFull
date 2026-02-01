@@ -10,8 +10,8 @@ import { usePersistedState } from '@/hooks/use-persisted-state';
 import { useRecipes } from '@/hooks/use-recipes';
 import { useAppTheme } from '@/hooks/use-theme';
 import { feedback } from '@/utils/feedback';
-import { addIngredientToRecipe, Recipe } from '@/utils/recipes';
-import { STORAGE_KEYS } from '@/utils/storage';
+import { addIngredientToRecipe, Recipe, RecipeIngredient } from '@/utils/recipes';
+import { storage, STORAGE_KEYS } from '@/utils/storage';
 import { useFocusEffect } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
@@ -138,8 +138,16 @@ export default function HomeScreen() {
     [updateRecipe]
   );
 
+  const handleRecipeDraftChange = useCallback(
+    async (updatedRecipe: Recipe) => {
+      setCurrentRecipe(updatedRecipe);
+      await updateRecipe(updatedRecipe);
+    },
+    [updateRecipe]
+  );
+
   const handleAddIngredient = useCallback(
-    (ingredient: any) => {
+    (ingredient: RecipeIngredient) => {
       // Haptic feedback
       Haptics.selectionAsync();
       
@@ -149,11 +157,32 @@ export default function HomeScreen() {
       setCurrentRecipe(recipe => {
         if (!recipe) return null;
         const updated = addIngredientToRecipe(recipe, ingredient);
+        updateRecipe(updated);
         return updated;
       });
       // Keep selector open for adding more ingredients
     },
-    []
+    [updateRecipe]
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      const applyScannedIngredient = async () => {
+        const scannedIng = await storage.get<RecipeIngredient | null>('TEMP_SCANNED_INGREDIENT', null);
+        if (!scannedIng) return;
+
+        await storage.set('TEMP_SCANNED_INGREDIENT', null);
+
+        if (!currentRecipe) return;
+
+        const updated = addIngredientToRecipe(currentRecipe, scannedIng);
+        setCurrentRecipe(updated);
+        await updateRecipe(updated);
+        await feedback.success(`Added ${scannedIng.name}!`);
+      };
+
+      applyScannedIngredient();
+    }, [currentRecipe, updateRecipe])
   );
 
   const handleDeleteRecipe = useCallback(
@@ -349,6 +378,7 @@ export default function HomeScreen() {
               visible={showRecipeBuilder}
               recipe={currentRecipe}
               onSave={handleSaveRecipe}
+              onRecipeChange={handleRecipeDraftChange}
               onCancel={() => {
                 setShowRecipeBuilder(false);
                 setCurrentRecipe(null);

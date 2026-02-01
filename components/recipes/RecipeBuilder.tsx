@@ -1,15 +1,16 @@
 import { Palette } from '@/constants/theme';
-import { Recipe, removeIngredientFromRecipe } from '@/utils/recipes';
-import React, { useEffect, useState } from 'react';
+import { Recipe, RecipeIngredient, removeIngredientFromRecipe } from '@/utils/recipes';
+import * as Haptics from 'expo-haptics';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
-    Alert,
-    Modal,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    View
+  Alert,
+  Keyboard,
+  Modal, Platform, Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -17,6 +18,7 @@ interface RecipeBuilderProps {
   visible: boolean;
   recipe: Recipe;
   onSave: (recipe: Recipe) => void;
+  onRecipeChange?: (recipe: Recipe) => void;
   onCancel: () => void;
   onAddIngredientPressed: () => void;
 }
@@ -25,18 +27,28 @@ export const RecipeBuilder = React.memo(function RecipeBuilder({
   visible,
   recipe,
   onSave,
+  onRecipeChange,
   onCancel,
   onAddIngredientPressed,
 }: RecipeBuilderProps) {
   const insets = useSafeAreaInsets();
   const [recipeName, setRecipeName] = useState(recipe.name);
   const [currentRecipe, setCurrentRecipe] = useState(recipe);
+  const [originalIngredients, setOriginalIngredients] = useState<RecipeIngredient[]>(recipe.ingredients);
+  const [editingIngredient, setEditingIngredient] = useState<RecipeIngredient | null>(null);
+  const [editingWeight, setEditingWeight] = useState('100');
+  const [activeScale, setActiveScale] = useState<number | null>(null);
+  const isWeb = Platform.OS === 'web';
 
-  // Sync recipe name when recipe prop changes or modal opens/closes
+  // Only update baseline when modal opens, preserve it during editing
   useEffect(() => {
-    setRecipeName(recipe.name);
-    setCurrentRecipe(recipe);
-  }, [recipe, visible]);
+    if (visible) {
+      setRecipeName(recipe.name);
+      setCurrentRecipe(recipe);
+      setOriginalIngredients(recipe.ingredients.map(ing => ({ ...ing })));
+      setActiveScale(null);
+    }
+  }, [visible]);
 
   const handleDeleteIngredient = (ingredientId: string) => {
     Alert.alert(
@@ -49,6 +61,8 @@ export const RecipeBuilder = React.memo(function RecipeBuilder({
           onPress: () => {
             const updated = removeIngredientFromRecipe(currentRecipe, ingredientId);
             setCurrentRecipe(updated);
+            setOriginalIngredients(updated.ingredients.map(ing => ({ ...ing })));
+            setActiveScale(null);
           },
           style: 'destructive',
         },
@@ -72,6 +86,109 @@ export const RecipeBuilder = React.memo(function RecipeBuilder({
     onCancel();
   };
 
+  const handleEditIngredient = (ingredient: RecipeIngredient) => {
+    setEditingIngredient(ingredient);
+    setEditingWeight(ingredient.weightInGrams.toString());
+  };
+
+  const handleSaveEditIngredient = () => {
+    if (!editingIngredient) return;
+    const newWeight = parseFloat(editingWeight) || editingIngredient.weightInGrams;
+    
+    if (newWeight <= 0) {
+      Alert.alert('Invalid Weight', 'Please enter a weight greater than 0');
+      return;
+    }
+
+    const weightRatio = newWeight / editingIngredient.weightInGrams;
+    const updatedIngredient: RecipeIngredient = {
+      ...editingIngredient,
+      weightInGrams: newWeight,
+      calories: editingIngredient.calories * weightRatio,
+      protein: editingIngredient.protein * weightRatio,
+      carbs: editingIngredient.carbs * weightRatio,
+      fat: editingIngredient.fat * weightRatio,
+      fiber: editingIngredient.fiber * weightRatio,
+    };
+
+    const updatedIngredients = currentRecipe.ingredients.map((ing) =>
+      ing.id === editingIngredient.id ? updatedIngredient : ing
+    );
+
+    const totalWeight = updatedIngredients.reduce((sum, ing) => sum + ing.weightInGrams, 0);
+    const updated = {
+      ...currentRecipe,
+      ingredients: updatedIngredients,
+      totalWeightInGrams: totalWeight,
+    };
+
+    setCurrentRecipe(updated);
+    setOriginalIngredients(updatedIngredients.map(ing => ({ ...ing })));
+    setActiveScale(null);
+    setEditingIngredient(null);
+  };
+
+  const handleScaleRecipe = (multiplier: number) => {
+    if (!isWeb) {
+      Haptics.selectionAsync();
+    }
+    
+    const scaledIngredients = currentRecipe.ingredients.map((ing) => ({
+      ...ing,
+      weightInGrams: ing.weightInGrams * multiplier,
+      calories: ing.calories * multiplier,
+      protein: ing.protein * multiplier,
+      carbs: ing.carbs * multiplier,
+      fat: ing.fat * multiplier,
+      fiber: ing.fiber * multiplier,
+    }));
+
+    const totalWeight = scaledIngredients.reduce((sum, ing) => sum + ing.weightInGrams, 0);
+    const updated = {
+      ...currentRecipe,
+      ingredients: scaledIngredients,
+      totalWeightInGrams: totalWeight,
+    };
+
+    setCurrentRecipe(updated);
+    setActiveScale(multiplier);
+  };
+
+  const handleResetScale = () => {
+    if (!isWeb) {
+      Haptics.selectionAsync();
+    }
+    const totalWeight = originalIngredients.reduce((sum, ing) => sum + ing.weightInGrams, 0);
+    const resetRecipe = {
+      ...currentRecipe,
+      ingredients: originalIngredients.map(ing => ({ ...ing })),
+      totalWeightInGrams: totalWeight,
+    };
+    setCurrentRecipe(resetRecipe);
+    setActiveScale(null);
+  };
+
+  const originalIngredientsById = useMemo(() => {
+    const map = new Map<string, RecipeIngredient>();
+    originalIngredients.forEach((ing) => map.set(ing.id, ing));
+    return map;
+  }, [originalIngredients]);
+
+  const isScaled =
+    currentRecipe.ingredients.length !== originalIngredients.length ||
+    currentRecipe.ingredients.some((ing) => {
+      const original = originalIngredientsById.get(ing.id);
+      if (!original) return true;
+      return (
+        ing.weightInGrams !== original.weightInGrams ||
+        ing.calories !== original.calories ||
+        ing.protein !== original.protein ||
+        ing.carbs !== original.carbs ||
+        ing.fat !== original.fat ||
+        ing.fiber !== original.fiber
+      );
+    });
+
   const totalNutrition = currentRecipe.ingredients.reduce(
     (sum, ing) => ({
       calories: sum.calories + ing.calories,
@@ -88,6 +205,14 @@ export const RecipeBuilder = React.memo(function RecipeBuilder({
     a.name.localeCompare(b.name)
   );
 
+  const nutritionPer100g = {
+    calories: totalNutrition.calories / (currentRecipe.totalWeightInGrams || 1) * 100,
+    protein: totalNutrition.protein / (currentRecipe.totalWeightInGrams || 1) * 100,
+    carbs: totalNutrition.carbs / (currentRecipe.totalWeightInGrams || 1) * 100,
+    fat: totalNutrition.fat / (currentRecipe.totalWeightInGrams || 1) * 100,
+    fiber: totalNutrition.fiber / (currentRecipe.totalWeightInGrams || 1) * 100,
+  };
+
   return (
     <Modal visible={visible} animationType="slide" transparent={false}>
       <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -101,7 +226,7 @@ export const RecipeBuilder = React.memo(function RecipeBuilder({
           </Pressable>
         </View>
 
-        <ScrollView style={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+        <ScrollView style={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="always">
           <View style={styles.labelRow}>
             <Text style={styles.label}>Recipe Name</Text>
             <Text style={styles.charCount}>{recipeName.length}/50</Text>
@@ -123,7 +248,14 @@ export const RecipeBuilder = React.memo(function RecipeBuilder({
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
                 <Text style={styles.sectionTitle}>Ingredients ({currentRecipe.ingredients.length})</Text>
-                <Pressable style={styles.addIngredientBtn} onPress={onAddIngredientPressed} hitSlop={8} accessibilityLabel="Add ingredient to recipe">
+                <Pressable
+                  style={styles.addIngredientBtn}
+                  onPress={() => {
+                    Keyboard.dismiss();
+                    onAddIngredientPressed();
+                  }}
+                  hitSlop={{ top: 12, bottom: 12, left: 16, right: 16 }}
+                  accessibilityLabel="Add ingredient to recipe">
                   <Text style={styles.addIngredientText}>+ Add</Text>
                 </Pressable>
               </View>
@@ -133,13 +265,16 @@ export const RecipeBuilder = React.memo(function RecipeBuilder({
               ) : (
                 <View style={styles.ingredientsList}>
                   {sortedIngredients.map((ingredient) => (
-                    <View key={ingredient.id} style={styles.ingredientItem}>
+                    <Pressable
+                      key={ingredient.id}
+                      style={styles.ingredientItem}
+                      onPress={() => handleEditIngredient(ingredient)}>
                       <View style={styles.ingredientInfo}>
                         <Text style={styles.ingredientName}>{ingredient.name}</Text>
                         <Text style={styles.ingredientWeight}>{ingredient.weightInGrams}g</Text>
                       </View>
                       <View style={styles.ingredientNutrition}>
-                        <Text style={styles.nutriValue}>
+                        <Text style={styles.ingredientCalories}>
                           {Math.round(ingredient.calories)} kcal
                         </Text>
                       </View>
@@ -150,7 +285,7 @@ export const RecipeBuilder = React.memo(function RecipeBuilder({
                         accessibilityLabel={`Delete ${ingredient.name}`}>
                         <Text style={styles.deleteIngredientText}>✕</Text>
                       </Pressable>
-                    </View>
+                    </Pressable>
                   ))}
                 </View>
               )}
@@ -158,29 +293,86 @@ export const RecipeBuilder = React.memo(function RecipeBuilder({
 
             {currentRecipe.ingredients.length > 0 && (
               <View style={styles.nutritionSummary}>
-                <Text style={styles.summaryTitle}>Total Nutrition</Text>
-                <View style={styles.nutritionGrid}>
-                  <View style={styles.nutriItem}>
-                    <Text style={styles.nutriLabel}>Total</Text>
-                    <Text style={styles.nutriValue}>{Math.round(totalNutrition.calories)} kcal</Text>
-                  </View>
-                  <View style={styles.nutriItem}>
-                    <Text style={styles.nutriLabel}>Protein</Text>
-                    <Text style={styles.nutriValue}>{Math.round(totalNutrition.protein)}g</Text>
-                  </View>
-                  <View style={styles.nutriItem}>
-                    <Text style={styles.nutriLabel}>Carbs</Text>
-                    <Text style={styles.nutriValue}>{Math.round(totalNutrition.carbs)}g</Text>
-                  </View>
-                  <View style={styles.nutriItem}>
-                    <Text style={styles.nutriLabel}>Fat</Text>
-                    <Text style={styles.nutriValue}>{Math.round(totalNutrition.fat)}g</Text>
-                  </View>
-                  <View style={styles.nutriItem}>
-                    <Text style={styles.nutriLabel}>Fiber</Text>
-                    <Text style={styles.nutriValue}>{Math.round(totalNutrition.fiber)}g</Text>
+                <View style={styles.scaleSection}>
+                  <Text style={styles.summaryTitle}>Scale Recipe</Text>
+                  <View style={styles.scaleButtonsRow}>
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.scaleButtonReset,
+                        !isScaled && styles.scaleButtonDisabled,
+                        pressed && isScaled && styles.scaleButtonPressed,
+                      ]}
+                      onPress={handleResetScale}
+                      disabled={!isScaled}>
+                      <Text style={styles.scaleButtonText}>Reset</Text>
+                    </Pressable>
+                    {[0.5, 1.5, 2, 3].map((multiplier) => (
+                      <Pressable
+                        key={multiplier}
+                        style={({ pressed }) => [
+                          styles.scaleButton,
+                          activeScale === multiplier && styles.scaleButtonActive,
+                          pressed && styles.scaleButtonPressed,
+                        ]}
+                        onPress={() => handleScaleRecipe(multiplier)}>
+                        <Text style={styles.scaleButtonText}>×{multiplier}</Text>
+                      </Pressable>
+                    ))}
                   </View>
                 </View>
+
+                <View style={styles.totalNutritionBox}>
+                  <Text style={styles.summaryTitle}>Per 100g</Text>
+                  <View style={styles.nutritionGrid}>
+                    <View style={styles.nutriItem}>
+                      <Text style={styles.nutriLabel}>Calories</Text>
+                      <Text style={styles.nutriValue}>{Math.round(nutritionPer100g.calories)}</Text>
+                    </View>
+                    <View style={styles.nutriItem}>
+                      <Text style={styles.nutriLabel}>Protein</Text>
+                      <Text style={styles.nutriValue}>{nutritionPer100g.protein.toFixed(1)}g</Text>
+                    </View>
+                    <View style={styles.nutriItem}>
+                      <Text style={styles.nutriLabel}>Carbs</Text>
+                      <Text style={styles.nutriValue}>{nutritionPer100g.carbs.toFixed(1)}g</Text>
+                    </View>
+                    <View style={styles.nutriItem}>
+                      <Text style={styles.nutriLabel}>Fat</Text>
+                      <Text style={styles.nutriValue}>{nutritionPer100g.fat.toFixed(1)}g</Text>
+                    </View>
+                    <View style={styles.nutriItem}>
+                      <Text style={styles.nutriLabel}>Fiber</Text>
+                      <Text style={styles.nutriValue}>{nutritionPer100g.fiber.toFixed(1)}g</Text>
+                    </View>
+                  </View>
+                </View>
+
+                <View style={styles.per100gSection}>
+                  <Text style={styles.per100gTitle}>Total Nutrition</Text>
+                  <View style={styles.per100gGrid}>
+                    <View style={styles.per100gItem}>
+                      <Text style={styles.per100gLabel}>Total</Text>
+                      <Text style={styles.per100gValue}>{Math.round(totalNutrition.calories)} kcal</Text>
+                    </View>
+                    <View style={styles.per100gItem}>
+                      <Text style={styles.per100gLabel}>Protein</Text>
+                      <Text style={styles.per100gValue}>{Math.round(totalNutrition.protein)}g</Text>
+                    </View>
+                    <View style={styles.per100gItem}>
+                      <Text style={styles.per100gLabel}>Carbs</Text>
+                      <Text style={styles.per100gValue}>{Math.round(totalNutrition.carbs)}g</Text>
+                    </View>
+                    <View style={styles.per100gItem}>
+                      <Text style={styles.per100gLabel}>Fat</Text>
+                      <Text style={styles.per100gValue}>{Math.round(totalNutrition.fat)}g</Text>
+                    </View>
+                    <View style={styles.per100gItem}>
+                      <Text style={styles.per100gLabel}>Fiber</Text>
+                      <Text style={styles.per100gValue}>{Math.round(totalNutrition.fiber)}g</Text>
+                    </View>
+                  </View>
+                </View>
+
                 <Text style={styles.totalWeight}>
                   Total Weight: {currentRecipe.totalWeightInGrams}g
                 </Text>
@@ -188,6 +380,70 @@ export const RecipeBuilder = React.memo(function RecipeBuilder({
             )}
           </ScrollView>
         </View>
+
+        {/* Edit Ingredient Modal */}
+        <Modal visible={!!editingIngredient} animationType="slide" transparent={false}>
+          <View style={[styles.editModal, { paddingTop: insets.top }]}>
+            <View style={styles.editModalHeader}>
+              <Pressable onPress={() => setEditingIngredient(null)} hitSlop={10}>
+                <Text style={styles.editModalCancel}>✕</Text>
+              </Pressable>
+              <Text style={styles.editModalTitle}>Edit {editingIngredient?.name}</Text>
+              <Pressable
+                style={styles.editModalSave}
+                onPress={handleSaveEditIngredient}
+                hitSlop={10}>
+                <Text style={styles.editModalSaveText}>Save</Text>
+              </Pressable>
+            </View>
+
+            <ScrollView style={styles.editModalContent} keyboardShouldPersistTaps="always">
+              <View style={styles.editSection}>
+                <Text style={styles.editLabel}>Weight (grams)</Text>
+                <TextInput
+                  style={styles.editInput}
+                  value={editingWeight}
+                  onChangeText={setEditingWeight}
+                  keyboardType="decimal-pad"
+                  placeholder="100"
+                  placeholderTextColor="#b3b3b3"
+                  autoFocus
+                />
+
+                {editingIngredient && (
+                  <View style={styles.editPreview}>
+                    <Text style={styles.editPreviewTitle}>Nutrition at this weight:</Text>
+                    <View style={styles.editPreviewGrid}>
+                      {(() => {
+                        const ratio = (parseFloat(editingWeight) || editingIngredient.weightInGrams) / editingIngredient.weightInGrams;
+                        return (
+                          <>
+                            <View style={styles.editPreviewItem}>
+                              <Text style={styles.editPreviewLabel}>Calories</Text>
+                              <Text style={styles.editPreviewValue}>{Math.round(editingIngredient.calories * ratio)}</Text>
+                            </View>
+                            <View style={styles.editPreviewItem}>
+                              <Text style={styles.editPreviewLabel}>Protein</Text>
+                              <Text style={styles.editPreviewValue}>{(editingIngredient.protein * ratio).toFixed(1)}g</Text>
+                            </View>
+                            <View style={styles.editPreviewItem}>
+                              <Text style={styles.editPreviewLabel}>Carbs</Text>
+                              <Text style={styles.editPreviewValue}>{(editingIngredient.carbs * ratio).toFixed(1)}g</Text>
+                            </View>
+                            <View style={styles.editPreviewItem}>
+                              <Text style={styles.editPreviewLabel}>Fat</Text>
+                              <Text style={styles.editPreviewValue}>{(editingIngredient.fat * ratio).toFixed(1)}g</Text>
+                            </View>
+                          </>
+                        );
+                      })()}
+                    </View>
+                  </View>
+                )}
+              </View>
+            </ScrollView>
+          </View>
+        </Modal>
     </Modal>
   );
 });
@@ -276,9 +532,12 @@ const styles = StyleSheet.create({
   },
   addIngredientBtn: {
     backgroundColor: Palette.primary,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
     borderRadius: 6,
+    minHeight: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   addIngredientText: {
     color: '#fff',
@@ -319,6 +578,11 @@ const styles = StyleSheet.create({
   },
   ingredientNutrition: {
     paddingLeft: 12,
+  },
+  ingredientCalories: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Palette.primary,
   },
   deleteIngredientBtn: {
     width: 32,
@@ -369,5 +633,170 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: 'rgba(255,255,255,0.9)',
     textAlign: 'center',
+    marginTop: 8,
+  },
+  scaleSection: {
+    marginBottom: 20,
+  },
+  totalNutritionBox: {
+    backgroundColor: 'rgba(0,0,0,0.1)',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+  },
+  scaleButtonsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 8,
+  },
+  scaleButton: {
+    flex: 1,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingVertical: 8,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  scaleButtonReset: {
+    flex: 1,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingVertical: 8,
+    borderRadius: 6,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.35)',
+  },
+  scaleButtonActive: {
+    backgroundColor: 'rgba(255,255,255,0.45)',
+    borderColor: 'rgba(255,255,255,0.7)',
+  },
+  scaleButtonPressed: {
+    opacity: 0.7,
+  },
+  scaleButtonDisabled: {
+    opacity: 0.4,
+  },
+  scaleButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  per100gSection: {
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 8,
+  },
+  per100gTitle: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.9)',
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  per100gGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  per100gItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  per100gLabel: {
+    fontSize: 10,
+    color: 'rgba(255,255,255,0.7)',
+    marginBottom: 4,
+  },
+  per100gValue: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  editModal: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
+  editModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    paddingTop: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: Palette.lightGray2,
+  },
+  editModalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: Palette.darkGray,
+    flex: 1,
+    textAlign: 'center',
+  },
+  editModalCancel: {
+    fontSize: 24,
+    color: Palette.gray,
+  },
+  editModalSave: {
+    backgroundColor: Palette.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 6,
+  },
+  editModalSaveText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  editModalContent: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingTop: 20,
+  },
+  editSection: {
+    marginBottom: 24,
+  },
+  editLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Palette.darkGray,
+    marginBottom: 8,
+  },
+  editInput: {
+    backgroundColor: Palette.lightGray2,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: Palette.darkGray,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#e8e8e8',
+  },
+  editPreview: {
+    backgroundColor: Palette.lightGray2,
+    borderRadius: 8,
+    padding: 12,
+  },
+  editPreviewTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Palette.darkGray,
+    marginBottom: 12,
+  },
+  editPreviewGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+  editPreviewItem: {
+    alignItems: 'center',
+  },
+  editPreviewLabel: {
+    fontSize: 11,
+    color: Palette.gray,
+    marginBottom: 4,
+  },
+  editPreviewValue: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Palette.darkGray,
   },
 });
