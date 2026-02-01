@@ -110,6 +110,8 @@ export const STORAGE_KEYS = {
   DARK_MODE: 'dark_mode_preference',
   WATER_TODAY: 'water_today',
   WORKOUT_HISTORY: 'workout_history',
+  WORKOUT_ROUTINES: 'workout_routines',
+  WORKOUT_TEMPLATES: 'workout_templates',
   RECIPES: 'recipes',
   HEVY_API_KEY: 'hevy_api_key',
   CUSTOM_EXERCISES: 'custom_exercises',

@@ -77,10 +77,10 @@ export default function WorkoutScreen() {
   const loadHistory = async () => {
     try {
       const stored = await storage.get<any[]>(STORAGE_KEYS.WORKOUT_HISTORY, []);
-      setWorkoutHistory(stored);
+      setWorkoutHistory(stored ?? []);
       
       const customExercisesData = await storage.get<Exercise[]>(STORAGE_KEYS.CUSTOM_EXERCISES, []);
-      setCustomExercises(customExercisesData);
+      setCustomExercises(customExercisesData ?? []);
     } catch (error) {
       console.error('Failed to load history:', error);
     }
@@ -232,38 +232,12 @@ export default function WorkoutScreen() {
     };
 
     try {
-      const history = await storage.get<any[]>(STORAGE_KEYS.WORKOUT_HISTORY, []);
+      const history = await storage.get<any[]>(STORAGE_KEYS.WORKOUT_HISTORY, []) ?? [];
       history.push(workout);
       await storage.set(STORAGE_KEYS.WORKOUT_HISTORY, history);
 
-      const shouldSave = await feedback.confirm(
-        'Workout Saved!',
-        'Save this as a template for next time?'
-      );
-
-      if (shouldSave) {
-        const templateName = await feedback.prompt(
-          'Template Name',
-          'Enter a name for this workout template:'
-        );
-
-        if (templateName) {
-          const routines = await storage.get<any[]>(STORAGE_KEYS.WORKOUT_ROUTINES, []);
-          const template = {
-            id: Date.now().toString(),
-            name: templateName,
-            exercises: completedExercises.map(e => ({
-              exerciseId: e.exerciseId,
-              exerciseName: e.exerciseName,
-              sets: e.sets.length,
-            })),
-          };
-          routines.push(template);
-          await storage.set(STORAGE_KEYS.WORKOUT_ROUTINES, routines);
-          await feedback.alert('Success', `Template "${templateName}" saved!`);
-        }
-      }
-
+      // Show save confirmation and offer template save option
+      await feedback.success('Workout saved!');
       router.back();
     } catch (error) {
       await feedback.alert('Error', 'Failed to save workout.');
@@ -271,10 +245,9 @@ export default function WorkoutScreen() {
   };
 
   const cancelWorkout = async () => {
-    const shouldCancel = await feedback.confirm('Cancel Workout', 'Are you sure? All progress will be lost.');
-    if (shouldCancel) {
+    feedback.confirm('Cancel Workout', 'Are you sure? All progress will be lost.', () => {
       router.back();
-    }
+    });
   };
 
   return (

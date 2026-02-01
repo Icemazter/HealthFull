@@ -90,8 +90,8 @@ export default function ProgressScreen() {
 
   const loadProgress = async () => {
     try {
-      const workoutData = await storage.get<any[]>(STORAGE_KEYS.WORKOUT_HISTORY, []);
-      const foodData = await storage.get<any[]>(STORAGE_KEYS.FOOD_ENTRIES, []);
+      const workoutData = await storage.get<any[]>(STORAGE_KEYS.WORKOUT_HISTORY, []) ?? [];
+      const foodData = await storage.get<any[]>(STORAGE_KEYS.FOOD_ENTRIES, []) ?? [];
       
       const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
       const weeklyWorkouts = workoutData.filter((w: any) => w.timestamp > weekAgo).length;

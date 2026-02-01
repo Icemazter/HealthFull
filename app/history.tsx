@@ -28,7 +28,7 @@ export default function HistoryScreen() {
   const loadHistory = async () => {
     try {
       const history = await storage.get<Workout[]>(STORAGE_KEYS.WORKOUT_HISTORY, []);
-      setWorkouts([...history].reverse()); // Most recent first
+      setWorkouts([...(history ?? [])].reverse()); // Most recent first
     } catch (error) {
       console.error('Failed to load history:', error);
     }

@@ -39,7 +39,7 @@ export default function RoutinesScreen() {
   const loadRoutines = async () => {
     try {
       const stored = await storage.get<Routine[]>(STORAGE_KEYS.WORKOUT_ROUTINES, []);
-      setRoutines(stored);
+      setRoutines(stored ?? []);
     } catch (error) {
       console.error('Failed to load routines:', error);
     }
@@ -77,8 +77,7 @@ export default function RoutinesScreen() {
   };
 
   const deleteRoutine = async (id: string) => {
-    const shouldDelete = await feedback.confirm('Delete Routine', 'Are you sure?');
-    if (shouldDelete) {
+    feedback.confirm('Delete Routine', 'Are you sure?', async () => {
       try {
         const newRoutines = routines.filter(r => r.id !== id);
         await storage.set(STORAGE_KEYS.WORKOUT_ROUTINES, newRoutines);
@@ -86,7 +85,7 @@ export default function RoutinesScreen() {
       } catch (error) {
         await feedback.alert('Error', 'Failed to delete routine.');
       }
-    }
+    });
   };
 
   const toggleExercise = (exerciseId: string) => {

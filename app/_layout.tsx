@@ -21,7 +21,6 @@ export default function RootLayout() {
           options={{
             title: 'Scan',
             headerBackTitle: 'Cancel',
-            headerBackTitleVisible: true,
           }}
         />
         <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />

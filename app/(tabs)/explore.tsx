@@ -36,13 +36,13 @@ export default function WorkoutHubScreen() {
   const loadData = async () => {
     try {
       const routines = await storage.get<Routine[]>(STORAGE_KEYS.WORKOUT_ROUTINES, []);
-      setRecentRoutines(routines.slice(0, 3));
+      setRecentRoutines((routines ?? []).slice(0, 3));
       
       const history = await storage.get<any[]>(STORAGE_KEYS.WORKOUT_HISTORY, []);
-      setWorkoutHistory(history);
+      setWorkoutHistory(history ?? []);
       
       const templatesData = await storage.get<WorkoutTemplate[]>(STORAGE_KEYS.WORKOUT_TEMPLATES, []);
-      setTemplates(templatesData);
+      setTemplates(templatesData ?? []);
     } catch (error) {
       console.error('Failed to load workout data:', error);
     }
