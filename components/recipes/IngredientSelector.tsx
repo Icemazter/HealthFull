@@ -4,6 +4,7 @@ import { STORAGE_KEYS, storage } from '@/utils/storage';
 import React, { useState } from 'react';
 import {
     Alert,
+    Keyboard,
     Modal,
     Pressable,
     ScrollView,
@@ -13,6 +14,28 @@ import {
     View
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+// Basic ingredients with average macros per 100g
+const BASIC_INGREDIENTS = [
+  { name: 'Egg', calories: 155, protein: 13, carbs: 1.1, fat: 11, fiber: 0, defaultWeight: 50 },
+  { name: 'Banana', calories: 89, protein: 1.1, carbs: 23, fat: 0.3, fiber: 2.6, defaultWeight: 100 },
+  { name: 'Chicken Breast', calories: 165, protein: 31, carbs: 0, fat: 3.6, fiber: 0, defaultWeight: 100 },
+  { name: 'Rice (cooked)', calories: 130, protein: 2.7, carbs: 28, fat: 0.3, fiber: 0.4, defaultWeight: 100 },
+  { name: 'Pasta (cooked)', calories: 131, protein: 5, carbs: 25, fat: 1.1, fiber: 1.8, defaultWeight: 100 },
+  { name: 'Oats', calories: 389, protein: 17, carbs: 66, fat: 7, fiber: 10.6, defaultWeight: 40 },
+  { name: 'Broccoli', calories: 34, protein: 2.8, carbs: 7, fat: 0.4, fiber: 2.4, defaultWeight: 100 },
+  { name: 'Sweet Potato', calories: 86, protein: 1.6, carbs: 20, fat: 0.1, fiber: 3, defaultWeight: 100 },
+  { name: 'Salmon', calories: 208, protein: 20, carbs: 0, fat: 13, fiber: 0, defaultWeight: 100 },
+  { name: 'Milk', calories: 61, protein: 3.2, carbs: 4.8, fat: 3.3, fiber: 0, defaultWeight: 100 },
+  { name: 'Almonds', calories: 579, protein: 21, carbs: 22, fat: 50, fiber: 12.5, defaultWeight: 28 },
+  { name: 'Apple', calories: 52, protein: 0.3, carbs: 14, fat: 0.2, fiber: 2.4, defaultWeight: 100 },
+  { name: 'Beef', calories: 250, protein: 26, carbs: 0, fat: 15, fiber: 0, defaultWeight: 100 },
+  { name: 'Peanut Butter', calories: 588, protein: 25, carbs: 20, fat: 50, fiber: 6, defaultWeight: 32 },
+  { name: 'Bread', calories: 265, protein: 9, carbs: 49, fat: 3.3, fiber: 2.7, defaultWeight: 30 },
+  { name: 'Olive Oil', calories: 884, protein: 0, carbs: 0, fat: 100, fiber: 0, defaultWeight: 14 },
+  { name: 'Yogurt', calories: 59, protein: 10, carbs: 3.3, fat: 0.4, fiber: 0, defaultWeight: 100 },
+  { name: 'Blueberries', calories: 57, protein: 0.7, carbs: 14, fat: 0.3, fiber: 2.4, defaultWeight: 100 },
+];
 
 interface IngredientSelectorProps {
   visible: boolean;
@@ -39,7 +62,7 @@ export const IngredientSelector = React.memo(function IngredientSelector({
   onScanPressed,
 }: IngredientSelectorProps) {
   const insets = useSafeAreaInsets();
-  const [activeTab, setActiveTab] = useState<'scan' | 'manual' | 'saved'>('scan');
+  const [activeTab, setActiveTab] = useState<'scan' | 'manual' | 'saved' | 'basics'>('scan');
   const [manualName, setManualName] = useState('');
   const [manualCalories, setManualCalories] = useState('');
   const [manualProtein, setManualProtein] = useState('');
@@ -52,6 +75,7 @@ export const IngredientSelector = React.memo(function IngredientSelector({
   const [useExactAmount, setUseExactAmount] = useState(false);
   const [selectedFood, setSelectedFood] = useState<SavedFood | null>(null);
   const [loadingSavedFoods, setLoadingSavedFoods] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   React.useEffect(() => {
     if (visible) {
@@ -121,22 +145,45 @@ export const IngredientSelector = React.memo(function IngredientSelector({
       return;
     }
 
+    const trimmedName = manualName.trim();
+    if (trimmedName.length > 50) {
+      Alert.alert('Name Too Long', 'Please enter an ingredient name with 50 characters or less');
+      return;
+    }
+
     const calories = parseFloat(manualCalories) || 0;
     const weight = parseFloat(manualWeight) || 0;
+    const protein = parseFloat(manualProtein) || 0;
+    const carbs = parseFloat(manualCarbs) || 0;
+    const fat = parseFloat(manualFat) || 0;
+    const fiber = parseFloat(manualFiber) || 0;
 
-    if (calories <= 0) {
+    // Validate calories
+    if (calories <= 0 || isNaN(calories)) {
       Alert.alert('Validation Error', 'Please enter calories greater than 0');
       return;
     }
 
-    if (weight <= 0) {
+    // Validate weight
+    if (weight <= 0 || isNaN(weight)) {
       Alert.alert('Validation Error', 'Please enter weight greater than 0g');
+      return;
+    }
+    
+    if (weight > 10000) {
+      Alert.alert('Validation Error', 'Maximum weight per ingredient is 10kg (10000g)');
+      return;
+    }
+
+    // Validate macro nutrients are non-negative
+    if (protein < 0 || carbs < 0 || fat < 0 || fiber < 0) {
+      Alert.alert('Validation Error', 'Nutrients cannot be negative');
       return;
     }
 
     const ingredient: RecipeIngredient = {
       id: `ing_${Date.now()}_${Math.random()}`,
-      name: manualName.trim(),
+      name: trimmedName,
       calories: parseFloat(calories.toFixed(2)),
       protein: parseFloat((parseFloat(manualProtein) || 0).toFixed(2)),
       carbs: parseFloat((parseFloat(manualCarbs) || 0).toFixed(2)),
@@ -148,6 +195,7 @@ export const IngredientSelector = React.memo(function IngredientSelector({
     onSelect(ingredient);
     persistWeight(manualWeight);
     resetManualForm();
+    Keyboard.dismiss(); // Close keyboard
     onCancel(); // Close the selector to return to recipe builder
   };
 
@@ -171,6 +219,7 @@ export const IngredientSelector = React.memo(function IngredientSelector({
     onSelect(ingredient);
     persistWeight(String(weight));
     resetManualForm();
+    Keyboard.dismiss(); // Close keyboard
     setSelectedFood(null);
     onCancel(); // Close the selector to return to recipe builder
   };
@@ -184,6 +233,29 @@ export const IngredientSelector = React.memo(function IngredientSelector({
     setManualFiber('');
     setManualWeight('100');
     setSelectedAmount('100');
+    setSearchQuery('');
+  };
+
+  const filteredSavedFoods = savedFoods.filter(food =>
+    food.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const handleBasicIngredientSelect = (basicIngredient: typeof BASIC_INGREDIENTS[0]) => {
+    const ingredient: RecipeIngredient = {
+      id: `ing_${Date.now()}_${Math.random()}`,
+      name: basicIngredient.name,
+      calories: parseFloat((basicIngredient.calories).toFixed(2)),
+      protein: parseFloat((basicIngredient.protein).toFixed(2)),
+      carbs: parseFloat((basicIngredient.carbs).toFixed(2)),
+      fat: parseFloat((basicIngredient.fat).toFixed(2)),
+      fiber: parseFloat((basicIngredient.fiber).toFixed(2)),
+      weightInGrams: basicIngredient.defaultWeight,
+    };
+
+    onSelect(ingredient);
+    persistWeight(String(basicIngredient.defaultWeight));
+    Keyboard.dismiss(); // Close keyboard
+    onCancel();
   };
 
   return (
@@ -198,17 +270,18 @@ export const IngredientSelector = React.memo(function IngredientSelector({
         </View>
 
         <View style={styles.tabs}>
-          {(['scan', 'manual', 'saved'] as const).map((tab) => (
+          {(['scan', 'manual', 'basics', 'saved'] as const).map((tab) => (
             <Pressable
               key={tab}
               style={[styles.tab, activeTab === tab && styles.tabActive]}
               onPress={() => setActiveTab(tab)}
               hitSlop={8}
-              accessibilityLabel={`${tab === 'scan' ? 'Scan' : tab === 'manual' ? 'Manual entry' : 'Saved foods'} tab`}>
+              accessibilityLabel={`${tab === 'scan' ? 'Scan' : tab === 'manual' ? 'Manual entry' : tab === 'basics' ? 'Basic ingredients' : 'Saved foods'} tab`}>
               <Text
                 style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>
                 {tab === 'scan' && '📷 Scan'}
                 {tab === 'manual' && '✏️ Manual'}
+                {tab === 'basics' && '🥚 Basics'}
                 {tab === 'saved' && '⭐ Saved'}
               </Text>
             </Pressable>
@@ -226,6 +299,25 @@ export const IngredientSelector = React.memo(function IngredientSelector({
                   accessibilityLabel="Open camera to scan barcode">
                   <Text style={styles.scanButtonText}>📷 Open Camera</Text>
                 </Pressable>
+              </View>
+            )}
+
+            {activeTab === 'basics' && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Common Ingredients</Text>
+                <View style={styles.basicsGrid}>
+                  {BASIC_INGREDIENTS.map((ingredient) => (
+                    <Pressable
+                      key={ingredient.name}
+                      style={styles.basicIngredientCard}
+                      onPress={() => handleBasicIngredientSelect(ingredient)}
+                      hitSlop={8}>
+                      <Text style={styles.basicIngredientName}>{ingredient.name}</Text>
+                      <Text style={styles.basicIngredientWeight}>{ingredient.defaultWeight}g</Text>
+                      <Text style={styles.basicIngredientCalories}>{Math.round(ingredient.calories * ingredient.defaultWeight / 100)} kcal</Text>
+                    </Pressable>
+                  ))}
+                </View>
               </View>
             )}
 
@@ -454,7 +546,17 @@ export const IngredientSelector = React.memo(function IngredientSelector({
                 ) : (
                   <View>
                     <Text style={styles.label}>Select from your food history</Text>
-                    {savedFoods.map((food) => (
+                    <TextInput
+                      style={styles.searchInput}
+                      placeholder="🔍 Search foods..."
+                      placeholderTextColor="#b3b3b3"
+                      value={searchQuery}
+                      onChangeText={setSearchQuery}
+                    />
+                    {filteredSavedFoods.length === 0 ? (
+                      <Text style={styles.emptyText}>No foods match your search</Text>
+                    ) : (
+                      filteredSavedFoods.map((food) => (
                       <View key={food.id} style={styles.savedFoodItem}>
                         <View style={styles.foodInfo}>
                           <Text style={styles.foodName}>{food.name}</Text>
@@ -475,7 +577,9 @@ export const IngredientSelector = React.memo(function IngredientSelector({
                           <Text style={styles.selectButtonText}>+</Text>
                         </Pressable>
                       </View>
-                    ))}
+                      ))
+                    )
+                    }
                   </View>
                 )}
               </View>
@@ -751,5 +855,47 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  basicsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginBottom: 16,
+  },
+  basicIngredientCard: {
+    width: '48%',
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#e8e8e8',
+    alignItems: 'center',
+  },
+  basicIngredientName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Palette.darkGray,
+    marginBottom: 4,
+  },
+  basicIngredientWeight: {
+    fontSize: 12,
+    color: Palette.gray,
+    marginBottom: 4,
+  },
+  basicIngredientCalories: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Palette.primary,
+  },
+  searchInput: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 12,
+    fontSize: 14,
+    color: Palette.darkGray,
   },
 });

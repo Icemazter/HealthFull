@@ -34,6 +34,7 @@ export default function ScanScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [lastScanTime, setLastScanTime] = useState(0);
   const [cameraKey, setCameraKey] = useState(0);
   const [foodData, setFoodData] = useState<FoodData | null>(null);
   const [showOptions, setShowOptions] = useState(false);
@@ -126,8 +127,9 @@ export default function ScanScreen() {
       setLoading(false);
       setCameraKey((prev) => prev + 1);
       
-      // Request camera permission on focus if not granted
-      if (!isWeb && permission && !permission.granted) {
+      // Request camera permission only if not yet decided (not granted and not denied)
+      // The permission hook caches the result, so we only ask once
+      if (!isWeb && permission && permission.status !== 'granted' && permission.status !== 'denied') {
         requestPermission();
       }
       
@@ -392,9 +394,51 @@ export default function ScanScreen() {
       
       const data = result.data;
 
-      // Fetch from OpenFoodFacts API
+      // Fetch from OpenFoodFacts API with timeout
       console.log('🌐 Fetching OpenFoodFacts API for:', data);
-      const response = await fetch(`https://world.openfoodfacts.org/api/v2/product/${data}.json`);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      
+      let response;
+      try {
+        response = await fetch(`https://world.openfoodfacts.org/api/v2/product/${data}.json`, {
+          signal: controller.signal,
+        });
+      } catch (fetchError) {
+        clearTimeout(timeoutId);
+        if (fetchError instanceof Error && fetchError.name === 'AbortError') {
+          console.error('⚠️ API request timeout');
+          if (!isWeb) {
+            await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+          }
+          await feedback.alert('Timeout', 'Could not fetch data. Check your connection and try again.');
+        } else {
+          throw fetchError;
+        }
+        setScanned(false);
+        setLoading(false);
+        if (isWeb) {
+          startBarcodeScanning();
+        }
+        return;
+      } finally {
+        clearTimeout(timeoutId);
+      }
+      
+      if (!response.ok) {
+        console.error('⚠️ API returned status:', response.status);
+        if (!isWeb) {
+          await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        }
+        await feedback.alert('Error', `Server error (${response.status}). Please try again.`);
+        setScanned(false);
+        setLoading(false);
+        if (isWeb) {
+          startBarcodeScanning();
+        }
+        return;
+      }
+
       const json = await response.json();
 
       console.log('📦 API Response:', json.status, json.product?.product_name);

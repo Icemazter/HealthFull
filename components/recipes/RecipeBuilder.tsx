@@ -75,6 +75,17 @@ export const RecipeBuilder = React.memo(function RecipeBuilder({
       alert('Please enter a recipe name');
       return;
     }
+    
+    if (recipeName.trim().length > 50) {
+      alert('Recipe name is too long (max 50 characters)');
+      return;
+    }
+    
+    if (currentRecipe.ingredients.length === 0) {
+      alert('Please add at least one ingredient to the recipe');
+      return;
+    }
+
     const updated = { ...currentRecipe, name: recipeName.trim() };
     onSave(updated);
   };
@@ -95,20 +106,25 @@ export const RecipeBuilder = React.memo(function RecipeBuilder({
     if (!editingIngredient) return;
     const newWeight = parseFloat(editingWeight) || editingIngredient.weightInGrams;
     
-    if (newWeight <= 0) {
-      Alert.alert('Invalid Weight', 'Please enter a weight greater than 0');
+    if (isNaN(newWeight) || newWeight <= 0) {
+      Alert.alert('Invalid Weight', 'Please enter a valid weight greater than 0');
+      return;
+    }
+    
+    if (newWeight > 10000) {
+      Alert.alert('Weight Too High', 'Maximum weight per ingredient is 10kg (10000g)');
       return;
     }
 
     const weightRatio = newWeight / editingIngredient.weightInGrams;
     const updatedIngredient: RecipeIngredient = {
       ...editingIngredient,
-      weightInGrams: newWeight,
-      calories: editingIngredient.calories * weightRatio,
-      protein: editingIngredient.protein * weightRatio,
-      carbs: editingIngredient.carbs * weightRatio,
-      fat: editingIngredient.fat * weightRatio,
-      fiber: editingIngredient.fiber * weightRatio,
+      weightInGrams: parseFloat(newWeight.toFixed(2)),
+      calories: parseFloat((editingIngredient.calories * weightRatio).toFixed(2)),
+      protein: parseFloat((editingIngredient.protein * weightRatio).toFixed(2)),
+      carbs: parseFloat((editingIngredient.carbs * weightRatio).toFixed(2)),
+      fat: parseFloat((editingIngredient.fat * weightRatio).toFixed(2)),
+      fiber: parseFloat((editingIngredient.fiber * weightRatio).toFixed(2)),
     };
 
     const updatedIngredients = currentRecipe.ingredients.map((ing) =>
