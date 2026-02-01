@@ -158,6 +158,39 @@ export default function ScanScreen() {
     };
   };
 
+  // Format amount for display (remove decimals if whole number)
+  const formatAmount = (value: string | number | undefined) => {
+    if (value === undefined || value === null) return '';
+    const num = typeof value === 'number' ? value : parseFloat(String(value));
+    if (isNaN(num)) return String(value);
+    return Number.isInteger(num) ? String(Math.round(num)) : String(num);
+  };
+
+  // Convert between units (g, ml, dl, tbsp, tsp)
+  const convertServingSize = (value: string, from: VolumeUnit, to: VolumeUnit): string => {
+    const num = parseFloat(value);
+    if (isNaN(num)) return value;
+
+    const unitToGram: Record<VolumeUnit, number> = {
+      g: 1,
+      ml: 1,
+      dl: 100,
+      tbsp: 15,
+      tsp: 5,
+    };
+
+    if (from === to) return value;
+    if (!unitToGram[from] || !unitToGram[to]) return value;
+
+    const grams = num * unitToGram[from];
+    const converted = grams / unitToGram[to];
+    // If converted is whole number, return without decimals
+    if (Math.abs(converted - Math.round(converted)) < 1e-9) {
+      return String(Math.round(converted));
+    }
+    return converted.toFixed(1);
+  };
+
   const animateMealChip = (meal: 'Breakfast' | 'Lunch' | 'Dinner' | 'Snack') => {
     if (!isWeb) {
       Haptics.selectionAsync();
