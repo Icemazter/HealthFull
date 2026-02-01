@@ -147,37 +147,15 @@ export default function ScanScreen() {
     }, [isWeb, permission, requestPermission])
   );
 
-  // Convert units for baking/powders
-  const convertServingSize = (value: string, from: VolumeUnit, to: VolumeUnit): string => {
-    const num = parseFloat(value);
-    if (isNaN(num)) return value;
-
-    // Approximate conversions for common kitchen units
-    const unitToGram: Record<VolumeUnit, number> = {
-      g: 1,
-      ml: 1,    // assume water-like density for quick logging
-      dl: 100,
-      tbsp: 15,
-      tsp: 5,
+  // Utility to ensure nutrition data has valid defaults
+  const ensureNutritionDefaults = (nutrients: Partial<NutrientData>): NutrientData => {
+    return {
+      calories: nutrients.calories ?? 0,
+      protein: nutrients.protein ?? 0,
+      carbs: nutrients.carbs ?? 0,
+      fat: nutrients.fat ?? 0,
+      fiber: nutrients.fiber ?? 0,
     };
-
-    if (from === to) return value;
-    if (!unitToGram[from] || !unitToGram[to]) return value;
-
-    const grams = num * unitToGram[from];
-    const converted = grams / unitToGram[to];
-    // If converted is whole number, return without decimals
-    if (Math.abs(converted - Math.round(converted)) < 1e-9) {
-      return String(Math.round(converted));
-    }
-    return converted.toFixed(1);
-  };
-
-  const formatAmount = (value: string | number | undefined) => {
-    if (value === undefined || value === null) return '';
-    const num = typeof value === 'number' ? value : parseFloat(String(value));
-    if (isNaN(num)) return String(value);
-    return Number.isInteger(num) ? String(Math.round(num)) : String(num);
   };
 
   const animateMealChip = (meal: 'Breakfast' | 'Lunch' | 'Dinner' | 'Snack') => {
@@ -262,7 +240,6 @@ export default function ScanScreen() {
       // Start scanning for barcodes (web)
       startBarcodeScanning();
     } catch (error) {
-      console.error('Error accessing camera:', error);
       await feedback.alert('Camera Error', 'Could not access camera. Please check permissions in your browser settings.');
     }
   };
@@ -276,7 +253,6 @@ export default function ScanScreen() {
         const { BrowserMultiFormatReader, BarcodeFormat, DecodeHintType } = module as typeof import('@zxing/library');
 
         if (!videoRef.current) {
-          console.error('Web video element not ready');
           return;
         }
 
@@ -318,7 +294,6 @@ export default function ScanScreen() {
 
         webScannerControlsRef.current = controls;
       } catch (err) {
-        console.error('Web barcode scanner error:', err);
         webScannerRunningRef.current = false;
         setWebScannerActive(false);
       }
@@ -338,7 +313,6 @@ export default function ScanScreen() {
         webScannerRef.current.reset();
       }
     } catch (err) {
-      console.log('Web scanner stop error:', err);
     } finally {
       webScannerRef.current = null;
       webScannerControlsRef.current = null;
@@ -373,11 +347,8 @@ export default function ScanScreen() {
   const handleBarCodeScanned = async (result: { type: string; data: string }) => {
     // Prevent multiple simultaneous scans
     if (loading) {
-      console.log('🔄 Already loading, ignoring scan');
       return;
     }
-    
-    console.log('📱 Barcode scanned:', result.data, 'Type:', result.type);
     
     setScanned(true);
     setLoading(true);
@@ -395,7 +366,6 @@ export default function ScanScreen() {
       const data = result.data;
 
       // Fetch from OpenFoodFacts API with timeout
-      console.log('🌐 Fetching OpenFoodFacts API for:', data);
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
       
@@ -407,7 +377,6 @@ export default function ScanScreen() {
       } catch (fetchError) {
         clearTimeout(timeoutId);
         if (fetchError instanceof Error && fetchError.name === 'AbortError') {
-          console.error('⚠️ API request timeout');
           if (!isWeb) {
             await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
           }
@@ -426,7 +395,6 @@ export default function ScanScreen() {
       }
       
       if (!response.ok) {
-        console.error('⚠️ API returned status:', response.status);
         if (!isWeb) {
           await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
         }
@@ -440,8 +408,6 @@ export default function ScanScreen() {
       }
 
       const json = await response.json();
-
-      console.log('📦 API Response:', json.status, json.product?.product_name);
 
       if (json.status === 1 && json.product) {
         const product = json.product;
@@ -481,7 +447,6 @@ export default function ScanScreen() {
         setShowOptions(true);
       } else {
         // Error feedback
-        console.log('❌ Product not found (status:', json.status, ')');
         if (!isWeb) {
           await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
         }
@@ -495,7 +460,6 @@ export default function ScanScreen() {
       }
     } catch (error) {
       // Error feedback
-      console.error('⚠️ Error fetching product:', error);
       if (!isWeb) {
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       }
@@ -520,14 +484,15 @@ export default function ScanScreen() {
 
       if (isRecipeMode) {
         // In recipe mode, pass ingredient back to recipe builder
+        const nutrients = ensureNutritionDefaults(foodData.nutrients);
         const ingredient = {
           id: `ing_${Date.now()}`,
           name: foodData.name,
-          calories: foodData.nutrients.calories * multiplier,
-          protein: foodData.nutrients.protein * multiplier,
-          carbs: foodData.nutrients.carbs * multiplier,
-          fat: foodData.nutrients.fat * multiplier,
-          fiber: foodData.nutrients.fiber * multiplier,
+          calories: nutrients.calories * multiplier,
+          protein: nutrients.protein * multiplier,
+          carbs: nutrients.carbs * multiplier,
+          fat: nutrients.fat * multiplier,
+          fiber: nutrients.fiber * multiplier,
           weightInGrams: totalWeight,
         };
         
@@ -541,16 +506,17 @@ export default function ScanScreen() {
         await feedback.success('Ingredient scanned!');
       } else {
         // Normal nutrition mode - add to daily food log
+        const nutrients = ensureNutritionDefaults(foodData.nutrients);
         const entries = (await storage.get<any[]>(STORAGE_KEYS.FOOD_ENTRIES, [])) ?? [];
         
         entries.push({
           id: Date.now().toString(),
           name: foodData.name,
-          calories: foodData.nutrients.calories * multiplier,
-          protein: foodData.nutrients.protein * multiplier,
-          carbs: foodData.nutrients.carbs * multiplier,
-          fat: foodData.nutrients.fat * multiplier,
-          fiber: foodData.nutrients.fiber * multiplier,
+          calories: nutrients.calories * multiplier,
+          protein: nutrients.protein * multiplier,
+          carbs: nutrients.carbs * multiplier,
+          fat: nutrients.fat * multiplier,
+          fiber: nutrients.fiber * multiplier,
           timestamp: Date.now(),
           mealType: mealType,
         });
@@ -769,7 +735,6 @@ export default function ScanScreen() {
                     resizeMode="cover"
                     onLoad={() => setImageLoaded(true)}
                     onError={() => {
-                      console.error('⚠️ Failed to load product image');
                       setImageLoaded(true); // Still show UI even if image fails
                     }}
                   />
@@ -956,7 +921,6 @@ export default function ScanScreen() {
                 style={styles.enlargedImage}
                 resizeMode="contain"
                 onError={() => {
-                  console.error('⚠️ Failed to load enlarged product image');
                 }}
               />
             )}

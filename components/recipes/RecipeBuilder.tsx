@@ -59,6 +59,9 @@ export const RecipeBuilder = React.memo(function RecipeBuilder({
         {
           text: 'Remove',
           onPress: () => {
+            if (!isWeb) {
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+            }
             const updated = removeIngredientFromRecipe(currentRecipe, ingredientId);
             setCurrentRecipe(updated);
             setOriginalIngredients(updated.ingredients.map(ing => ({ ...ing })));
@@ -84,6 +87,10 @@ export const RecipeBuilder = React.memo(function RecipeBuilder({
     if (currentRecipe.ingredients.length === 0) {
       alert('Please add at least one ingredient to the recipe');
       return;
+    }
+
+    if (!isWeb) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
 
     const updated = { ...currentRecipe, name: recipeName.trim() };
@@ -142,6 +149,10 @@ export const RecipeBuilder = React.memo(function RecipeBuilder({
     setOriginalIngredients(updatedIngredients.map(ing => ({ ...ing })));
     setActiveScale(null);
     setEditingIngredient(null);
+
+    if (!isWeb) {
+      Haptics.selectionAsync();
+    }
   };
 
   const handleScaleRecipe = (multiplier: number) => {

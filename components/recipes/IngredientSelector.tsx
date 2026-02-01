@@ -96,7 +96,6 @@ export const IngredientSelector = React.memo(function IngredientSelector({
         onSelect(scannedIng);
       }
     } catch (error) {
-      console.error('Error checking for scanned ingredient:', error);
     }
   };
 
@@ -124,7 +123,6 @@ export const IngredientSelector = React.memo(function IngredientSelector({
         setSavedFoods(Array.from(foodMap.values()));
       }
     } catch (error) {
-      console.error('Error loading saved foods:', error);
       Alert.alert('Error', 'Failed to load saved foods');
     } finally {
       setLoadingSavedFoods(false);
@@ -135,7 +133,6 @@ export const IngredientSelector = React.memo(function IngredientSelector({
     try {
       await storage.set(STORAGE_KEYS.LAST_INGREDIENT_WEIGHT, weight);
     } catch (error) {
-      console.error('Error persisting weight:', error);
     }
   };
 

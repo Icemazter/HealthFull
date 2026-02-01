@@ -131,9 +131,15 @@ export default function HomeScreen() {
 
   const handleSaveRecipe = useCallback(
     async (recipe: Recipe) => {
-      await updateRecipe(recipe);
-      setShowRecipeBuilder(false);
-      setCurrentRecipe(null);
+      try {
+        await updateRecipe(recipe);
+        await feedback.success(`Recipe "${recipe.name}" saved!`);
+        setShowRecipeBuilder(false);
+        setCurrentRecipe(null);
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+        await feedback.error(`Failed to save recipe: ${errorMsg}`, 'Save Error');
+      }
     },
     [updateRecipe]
   );
@@ -187,10 +193,16 @@ export default function HomeScreen() {
 
   const handleDeleteRecipe = useCallback(
     async (recipeId: string) => {
-      await deleteRecipe(recipeId);
-      if (currentRecipe?.id === recipeId) {
-        setCurrentRecipe(null);
-        setShowRecipeBuilder(false);
+      try {
+        await deleteRecipe(recipeId);
+        await feedback.success('Recipe deleted');
+        if (currentRecipe?.id === recipeId) {
+          setCurrentRecipe(null);
+          setShowRecipeBuilder(false);
+        }
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+        await feedback.error(`Failed to delete recipe: ${errorMsg}`, 'Delete Error');
       }
     },
     [deleteRecipe, currentRecipe]
