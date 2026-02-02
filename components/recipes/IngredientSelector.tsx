@@ -276,10 +276,10 @@ export const IngredientSelector = React.memo(function IngredientSelector({
               accessibilityLabel={`${tab === 'scan' ? 'Scan' : tab === 'manual' ? 'Manual entry' : tab === 'basics' ? 'Basic ingredients' : 'Saved foods'} tab`}>
               <Text
                 style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>
-                {tab === 'scan' && '📷 Scan'}
-                {tab === 'manual' && '✏️ Manual'}
-                {tab === 'basics' && '🥚 Basics'}
-                {tab === 'saved' && '⭐ Saved'}
+                {tab === 'scan' && 'Scan'}
+                {tab === 'manual' && 'Manual'}
+                {tab === 'basics' && 'Basics'}
+                {tab === 'saved' && 'Saved'}
               </Text>
             </Pressable>
           ))}
@@ -294,7 +294,7 @@ export const IngredientSelector = React.memo(function IngredientSelector({
                   onPress={onScanPressed}
                   hitSlop={10}
                   accessibilityLabel="Open camera to scan barcode">
-                  <Text style={styles.scanButtonText}>📷 Open Camera</Text>
+                  <Text style={styles.scanButtonText}>Open Camera</Text>
                 </Pressable>
               </View>
             )}
