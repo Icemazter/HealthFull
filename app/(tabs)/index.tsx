@@ -30,7 +30,7 @@ const mealOrder: Array<'Breakfast' | 'Lunch' | 'Dinner' | 'Snack' | 'Other'> = [
 export default function HomeScreen() {
   const { isDark, toggleTheme } = useAppTheme();
   const foodManager = useFoodManager();
-  const { recipes, addRecipe, deleteRecipe, updateRecipe } = useRecipes();
+  const { recipes, addRecipe, deleteRecipe, updateRecipe, loadRecipes } = useRecipes();
   const [goals, setGoals] = usePersistedState(STORAGE_KEYS.MACRO_GOALS, { calories: 2000, protein: 150, carbs: 200, fat: 65, fiber: 30 });
   const [diabetesMode] = usePersistedState(STORAGE_KEYS.DIABETES_MODE, false);
   const [focusedMacro, setFocusedMacro] = useState<'calories' | 'protein' | 'carbs' | 'fat' | 'fiber'>('calories');
@@ -185,6 +185,10 @@ export default function HomeScreen() {
         setCurrentRecipe(updated);
         await updateRecipe(updated);
         await feedback.success(`Added ${scannedIng.name}!`);
+        
+        // Reopen recipe builder and ingredient selector to return to recipe building context
+        setShowRecipeBuilder(true);
+        setShowIngredientSelector(true);
       };
 
       applyScannedIngredient();
@@ -195,7 +199,6 @@ export default function HomeScreen() {
     async (recipeId: string) => {
       try {
         await deleteRecipe(recipeId);
-        await feedback.success('Recipe deleted');
         if (currentRecipe?.id === recipeId) {
           setCurrentRecipe(null);
           setShowRecipeBuilder(false);
@@ -391,7 +394,11 @@ export default function HomeScreen() {
               recipe={currentRecipe}
               onSave={handleSaveRecipe}
               onRecipeChange={handleRecipeDraftChange}
-              onCancel={() => {
+              onCancel={async () => {
+                // Delete recipe if it's empty (no ingredients)
+                if (currentRecipe && currentRecipe.ingredients.length === 0) {
+                  await deleteRecipe(currentRecipe.id);
+                }
                 setShowRecipeBuilder(false);
                 setCurrentRecipe(null);
               }}

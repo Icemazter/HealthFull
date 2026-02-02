@@ -167,28 +167,118 @@ export default function ScanScreen() {
   };
 
   // Convert between units (g, ml, dl, tbsp, tsp)
+  /**
+   * Estimate density based on product name/category
+   * Returns grams per ml (e.g., water = 1.0, oil = 0.92, honey = 1.42)
+   * Supports both English and Swedish product names
+   */
+  const estimateDensity = (productName: string): number => {
+    const name = productName.toLowerCase();
+    
+    // Check milk products FIRST to avoid confusion with "havre" in havremjölk
+    // Swedish: mjölk, havredryck, sojamjölk, mandelmjölk
+    if (name.match(/milk|mjölk|havredryck|havremjölk|sojamjölk|mandelmjölk|almond milk|soy milk|oat milk/)) return 1.03;
+    
+    // Dry ingredients (much lighter, lots of air)
+    // Swedish: havregryn, mjöl, socker, ris, pasta, bulgur
+    if (name.match(/oats|oat flakes|rolled oats|havregryn|havre/)) return 0.47;
+    if (name.match(/flour|mjöl|vetemjöl|rågmjöl/)) return 0.53;
+    if (name.match(/sugar|socker|strösocker|farinsocker|brown sugar/)) return 0.85;
+    if (name.match(/rice|ris|jasminris|basmatiris/)) return 0.85;
+    if (name.match(/pasta|makaroner|spaghetti|penne/)) return 0.6;
+    if (name.match(/quinoa|bulgur|couscous|kuskus/)) return 0.75;
+    if (name.match(/nuts|nötter|mandlar|cashew|valnötter|hasselnötter|pecannötter/)) return 0.6;
+    if (name.match(/seeds|frön|sesamfrön|solrosfrön|pumpafrön|chiafrön|linfrön/)) return 0.55;
+    if (name.match(/bread crumbs|ströbröd|panko/)) return 0.35;
+    if (name.match(/cocoa|cacao|kakao/)) return 0.55;
+    if (name.match(/protein powder|proteinpulver|whey/)) return 0.4;
+    if (name.match(/salt|pepper|kryddor|spice/)) return 1.2;
+    
+    // Oils and fats (lighter than water)
+    // Swedish: olja, olivolja, kokosolja
+    if (name.match(/oil|olive|canola|vegetable|sunflower|coconut oil|olja|olivolja|kokosolja|rapsolja/)) return 0.92;
+    if (name.match(/butter|margarine|smör/)) return 0.91;
+    
+    // Dense liquids (heavier than water)
+    // Swedish: honung, sirap
+    if (name.match(/honey|syrup|maple|agave|molasses|honung|sirap|lönnsirap/)) return 1.42;
+    if (name.match(/cream|heavy cream|grädde|vispgrädde/)) return 1.01;
+    if (name.match(/yogurt|sour cream|yoghurt|filmjölk|kvarg|grekisk yoghurt|greek yogurt/)) return 1.04;
+    if (name.match(/sour cream|crème fraiche|creme fraiche|gräddfil/)) return 1.02;
+    
+    if (name.match(/juice|soda|cola|drink|beverage|water|vatten|läsk|dryck|juice/)) return 1.04;
+    if (name.match(/wine|beer|öl|vin|cider/)) return 1.0;
+    if (name.match(/vinegar|vinäger|ättika/)) return 1.01;
+    
+    // Sauces and condiments
+    // Swedish: senap, sås, majonnäs
+    if (name.match(/ketchup|tomato sauce|tomatpuré|tomatsås/)) return 1.1;
+    if (name.match(/mayo|mayonnaise|majonnäs/)) return 0.95;
+    if (name.match(/mustard|senap/)) return 1.1;
+    if (name.match(/soy sauce|soja|sojasås/)) return 1.15;
+    if (name.match(/peanut butter|nut butter|nutella|jordnötsmör|mandelmör|nötsmör/)) return 1.1;
+    if (name.match(/tahini|sesamsmör/)) return 1.4;
+    if (name.match(/jam|marmalade|sylt|marmelad/)) return 1.33;
+    
+    // Beans and legumes (when referring to dried)
+    if (name.match(/beans|lentils|chickpeas|bönor|linser|kikärtor|svarta bönor|kidney beans/)) return 0.8;
+    
+    // Default to water density for unknown liquids
+    return 1.0;
+  };
+
   const convertServingSize = (value: string, from: VolumeUnit, to: VolumeUnit): string => {
     const num = parseFloat(value);
     if (isNaN(num)) return value;
-
-    const unitToGram: Record<VolumeUnit, number> = {
-      g: 1,
-      ml: 1,
-      dl: 100,
-      tbsp: 15,
-      tsp: 5,
-    };
-
     if (from === to) return value;
-    if (!unitToGram[from] || !unitToGram[to]) return value;
 
-    const grams = num * unitToGram[from];
-    const converted = grams / unitToGram[to];
-    // If converted is whole number, return without decimals
-    if (Math.abs(converted - Math.round(converted)) < 1e-9) {
-      return String(Math.round(converted));
+    // Define conversion to ml for volume units
+    const volumeUnits = { ml: 1, dl: 100, tbsp: 15, tsp: 5 };
+    const weightUnits = { g: 1 };
+    
+    const isFromVolume = from in volumeUnits;
+    const isToVolume = to in volumeUnits;
+    const isFromWeight = from in weightUnits;
+    const isToWeight = to in weightUnits;
+
+    // Volume to Volume conversion (no density needed)
+    if (isFromVolume && isToVolume) {
+      const ml = num * volumeUnits[from as keyof typeof volumeUnits];
+      const converted = ml / volumeUnits[to as keyof typeof volumeUnits];
+      return Math.abs(converted - Math.round(converted)) < 1e-9 
+        ? String(Math.round(converted)) 
+        : converted.toFixed(1);
     }
-    return converted.toFixed(1);
+
+    // Weight to Weight (just grams for now)
+    if (isFromWeight && isToWeight) {
+      return value;
+    }
+
+    // Volume to Weight or Weight to Volume - apply density
+    const density = estimateDensity(foodData?.name || '');
+    
+    if (isFromVolume && isToWeight) {
+      // Convert volume -> ml -> grams using density
+      const ml = num * volumeUnits[from as keyof typeof volumeUnits];
+      const grams = ml * density;
+      const converted = grams / weightUnits[to as keyof typeof weightUnits];
+      return Math.abs(converted - Math.round(converted)) < 1e-9 
+        ? String(Math.round(converted)) 
+        : converted.toFixed(1);
+    }
+
+    if (isFromWeight && isToVolume) {
+      // Convert grams -> ml using density -> target volume unit
+      const grams = num * weightUnits[from as keyof typeof weightUnits];
+      const ml = grams / density;
+      const converted = ml / volumeUnits[to as keyof typeof volumeUnits];
+      return Math.abs(converted - Math.round(converted)) < 1e-9 
+        ? String(Math.round(converted)) 
+        : converted.toFixed(1);
+    }
+
+    return value;
   };
 
   const animateMealChip = (meal: 'Breakfast' | 'Lunch' | 'Dinner' | 'Snack') => {
@@ -536,7 +626,6 @@ export default function ScanScreen() {
         if (!isWeb) {
           await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         }
-        await feedback.success('Ingredient scanned!');
       } else {
         // Normal nutrition mode - add to daily food log
         const nutrients = ensureNutritionDefaults(foodData.nutrients);

@@ -1,8 +1,8 @@
 import { Palette } from '@/constants/theme';
+import { feedback } from '@/utils/feedback';
 import { Recipe } from '@/utils/recipes';
 import React, { useState } from 'react';
 import {
-    Alert,
     Pressable,
     ScrollView,
     StyleSheet,
@@ -63,17 +63,10 @@ export const RecipesList = React.memo(function RecipesList({
                     pressed && styles.deleteCirclePressed,
                   ]}
                   onPress={() => {
-                    Alert.alert(
+                    feedback.confirm(
                       'Delete Recipe',
                       `Are you sure you want to delete "${recipe.name}"?`,
-                      [
-                        { text: 'Cancel', onPress: () => {}, style: 'cancel' },
-                        {
-                          text: 'Delete',
-                          onPress: () => onDeleteRecipe(recipe.id),
-                          style: 'destructive',
-                        },
-                      ]
+                      () => onDeleteRecipe(recipe.id)
                     );
                   }}>
                   <Text style={styles.deleteCircleText}>−</Text>
