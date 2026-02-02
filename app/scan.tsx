@@ -614,6 +614,8 @@ export default function ScanScreen() {
     setServingSize('100');
     setShowEnlargedImage(false);
     setImageLoaded(false);
+    // Restart scanning - increment camera key to force re-render
+    setCameraKey((prev) => prev + 1);
     // Restart scanning on web
     if (isWeb) {
       startBarcodeScanning();
@@ -833,6 +835,25 @@ export default function ScanScreen() {
             {isRecipeMode ? (
               <View style={styles.amountSection}>
                 <Text style={styles.quantityLabel}>🔢 Total Amount Added</Text>
+                <View style={styles.unitSelector}>
+                  {['g', 'ml', 'dl', 'tbsp', 'tsp'].map((unit) => (
+                    <Pressable
+                      key={unit}
+                      style={[styles.unitButton, unitType === unit && styles.unitButtonActive]}
+                      onPress={() => {
+                        if (!isWeb) {
+                          Haptics.selectionAsync();
+                        }
+                        const converted = convertServingSize(customAmount, unitType, unit as 'g' | 'ml' | 'dl' | 'tbsp' | 'tsp');
+                        setCustomAmount(converted);
+                        setUnitType(unit as 'g' | 'ml' | 'dl' | 'tbsp' | 'tsp');
+                      }}>
+                      <Text style={[styles.unitButtonText, unitType === unit && styles.unitButtonTextActive]}>
+                        {unit}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
                 <View style={styles.quantityInputRow}>
                   <TextInput
                     style={styles.quantityInput}

@@ -1,6 +1,6 @@
-import React from 'react';
-import { View, Text, StyleSheet, TextStyle, ViewStyle, StyleProp } from 'react-native';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import React from 'react';
+import { StyleProp, StyleSheet, Text, TextStyle, View, ViewStyle } from 'react-native';
 import { Icon } from './Icon';
 
 interface IconTextProps {
