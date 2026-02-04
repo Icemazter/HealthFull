@@ -50,6 +50,14 @@ export const RecipeBuilder = React.memo(function RecipeBuilder({
     }
   }, [visible]);
 
+  // Update when recipe prop changes while modal is open (e.g., when ingredients are added)
+  useEffect(() => {
+    if (visible && recipe.ingredients.length !== currentRecipe.ingredients.length) {
+      setCurrentRecipe(recipe);
+      setOriginalIngredients(recipe.ingredients.map(ing => ({ ...ing })));
+    }
+  }, [recipe, visible, currentRecipe.ingredients.length]);
+
   const handleDeleteIngredient = (ingredientId: string) => {
     Alert.alert(
       'Remove Ingredient',
@@ -66,6 +74,10 @@ export const RecipeBuilder = React.memo(function RecipeBuilder({
             setCurrentRecipe(updated);
             setOriginalIngredients(updated.ingredients.map(ing => ({ ...ing })));
             setActiveScale(null);
+            // Notify parent of change
+            if (onRecipeChange) {
+              onRecipeChange(updated);
+            }
           },
           style: 'destructive',
         },
