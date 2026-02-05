@@ -1,5 +1,7 @@
+import { BASIC_INGREDIENTS } from '@/constants/basic-ingredients';
 import { Palette } from '@/constants/theme';
-import React, { useState } from 'react';
+import { storage } from '@/utils/storage';
+import React, { useMemo, useState } from 'react';
 import {
     Modal,
     Pressable,
@@ -11,27 +13,8 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-// Basic ingredients with average macros per 100g (shared from IngredientSelector)
-const BASIC_INGREDIENTS = [
-  { name: 'Egg', calories: 155, protein: 13, carbs: 1.1, fat: 11, fiber: 0, defaultWeight: 50 },
-  { name: 'Banana', calories: 89, protein: 1.1, carbs: 23, fat: 0.3, fiber: 2.6, defaultWeight: 100 },
-  { name: 'Chicken Breast', calories: 165, protein: 31, carbs: 0, fat: 3.6, fiber: 0, defaultWeight: 100 },
-  { name: 'Rice (cooked)', calories: 130, protein: 2.7, carbs: 28, fat: 0.3, fiber: 0.4, defaultWeight: 100 },
-  { name: 'Pasta (cooked)', calories: 131, protein: 5, carbs: 25, fat: 1.1, fiber: 1.8, defaultWeight: 100 },
-  { name: 'Oats', calories: 389, protein: 17, carbs: 66, fat: 7, fiber: 10.6, defaultWeight: 40 },
-  { name: 'Broccoli', calories: 34, protein: 2.8, carbs: 7, fat: 0.4, fiber: 2.4, defaultWeight: 100 },
-  { name: 'Sweet Potato', calories: 86, protein: 1.6, carbs: 20, fat: 0.1, fiber: 3, defaultWeight: 100 },
-  { name: 'Salmon', calories: 208, protein: 20, carbs: 0, fat: 13, fiber: 0, defaultWeight: 100 },
-  { name: 'Milk', calories: 61, protein: 3.2, carbs: 4.8, fat: 3.3, fiber: 0, defaultWeight: 100 },
-  { name: 'Almonds', calories: 579, protein: 21, carbs: 22, fat: 50, fiber: 12.5, defaultWeight: 28 },
-  { name: 'Apple', calories: 52, protein: 0.3, carbs: 14, fat: 0.2, fiber: 2.4, defaultWeight: 100 },
-  { name: 'Beef', calories: 250, protein: 26, carbs: 0, fat: 15, fiber: 0, defaultWeight: 100 },
-  { name: 'Peanut Butter', calories: 588, protein: 25, carbs: 20, fat: 50, fiber: 6, defaultWeight: 32 },
-  { name: 'Bread', calories: 265, protein: 9, carbs: 49, fat: 3.3, fiber: 2.7, defaultWeight: 30 },
-  { name: 'Olive Oil', calories: 884, protein: 0, carbs: 0, fat: 100, fiber: 0, defaultWeight: 14 },
-  { name: 'Yogurt', calories: 59, protein: 10, carbs: 3.3, fat: 0.4, fiber: 0, defaultWeight: 100 },
-  { name: 'Blueberries', calories: 57, protein: 0.7, carbs: 14, fat: 0.3, fiber: 2.4, defaultWeight: 100 },
-];
+// Utility for generating unique IDs
+const generateUniqueId = (prefix: string) => `${prefix}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
 interface ManualEntryModalProps {
   visible: boolean;
@@ -53,7 +36,7 @@ export const ManualEntryModal = React.memo(function ManualEntryModal({
   onCancel,
 }: ManualEntryModalProps) {
   const insets = useSafeAreaInsets();
-  const [activeTab, setActiveTab] = useState<'manual' | 'basics'>('manual');
+  const [activeTab, setActiveTab] = useState<'manual' | 'basics' | 'saved'>('manual');
   const [name, setName] = useState('');
   const [calories, setCalories] = useState('');
   const [protein, setProtein] = useState('');
@@ -63,6 +46,62 @@ export const ManualEntryModal = React.memo(function ManualEntryModal({
   const [mealType, setMealType] = useState<'Breakfast' | 'Lunch' | 'Dinner' | 'Snack'>('Lunch');
   const [selectedBasic, setSelectedBasic] = useState<typeof BASIC_INGREDIENTS[0] | null>(null);
   const [basicWeight, setBasicWeight] = useState('100');
+  const [savedFoods, setSavedFoods] = useState<any[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  React.useEffect(() => {
+    if (visible && activeTab === 'saved') {
+      loadSavedFoods();
+    }
+  }, [visible, activeTab]);
+
+  const loadSavedFoods = async () => {
+    try {
+      const entries = await storage.get<any[]>('FOOD_ENTRIES', []);
+      if (entries && entries.length > 0) {
+        const foods = entries.map(entry => ({
+          id: entry.id,
+          name: entry.name,
+          calories: entry.calories,
+          protein: entry.protein,
+          carbs: entry.carbs,
+          fat: entry.fat,
+          fiber: entry.fiber || 0,
+          weight: 100,
+        }));
+        setSavedFoods(foods);
+      }
+    } catch (error) {
+      console.error('Failed to load saved foods:', error);
+    }
+  };
+
+  const filteredSavedFoods = useMemo(
+    () => savedFoods.filter(food =>
+      food.name.toLowerCase().includes(searchQuery.toLowerCase())
+    ),
+    [savedFoods, searchQuery]
+  );
+
+  const handleSavedFoodSelect = (food: any) => {
+    const weight = parseFloat(basicWeight) || 100;
+    const multiplier = weight / 100;
+
+    onAdd({
+      name: food.name,
+      calories: parseFloat((food.calories * multiplier).toFixed(2)),
+      protein: parseFloat((food.protein * multiplier).toFixed(2)),
+      carbs: parseFloat((food.carbs * multiplier).toFixed(2)),
+      fat: parseFloat((food.fat * multiplier).toFixed(2)),
+      fiber: parseFloat((food.fiber * multiplier).toFixed(2)),
+      mealType: mealType,
+    });
+
+    // Reset form
+    setSelectedBasic(null);
+    setBasicWeight('100');
+    setSearchQuery('');
+  };
 
   const handleAdd = () => {
     if (activeTab === 'manual') {
@@ -127,13 +166,13 @@ export const ManualEntryModal = React.memo(function ManualEntryModal({
             style={[styles.addButton, (activeTab === 'basics' && !selectedBasic) && styles.addButtonDisabled]} 
             onPress={handleAdd} 
             hitSlop={10}
-            disabled={activeTab === 'basics' && !selectedBasic}>
+            disabled={(activeTab === 'basics' && !selectedBasic) || (activeTab === 'saved' && !selectedBasic)}>
             <Text style={styles.addButtonText}>Add</Text>
           </Pressable>
         </View>
 
         <View style={styles.tabsContainer}>
-          {(['manual', 'basics'] as const).map((tab) => (
+          {(['manual', 'basics', 'saved'] as const).map((tab) => (
             <Pressable
               key={tab}
               style={[styles.tab, activeTab === tab && styles.tabActive]}
@@ -141,7 +180,7 @@ export const ManualEntryModal = React.memo(function ManualEntryModal({
               hitSlop={8}>
               <Text
                 style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>
-                {tab === 'manual' ? 'Manual' : 'Basics'}
+                {tab === 'manual' ? 'Manual' : tab === 'basics' ? 'Basics' : 'Saved'}
               </Text>
             </Pressable>
           ))}
@@ -330,6 +369,47 @@ export const ManualEntryModal = React.memo(function ManualEntryModal({
                       </Text>
                     </View>
                   </View>
+                </View>
+              )}
+            </View>
+          )}
+
+          {activeTab === 'saved' && (
+            <View style={styles.section}>
+              <Text style={styles.label}>Select from saved foods</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Search foods..."
+                placeholderTextColor={Palette.gray}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+              />
+              {filteredSavedFoods.length === 0 ? (
+                <Text style={styles.emptyText}>No saved foods yet</Text>
+              ) : (
+                <View style={styles.savedFoodsContainer}>
+                  {filteredSavedFoods.map((food) => (
+                    <Pressable
+                      key={food.id}
+                      style={styles.savedFoodItem}
+                      onPress={() => {
+                        setSelectedBasic(food as any);
+                        setBasicWeight('100');
+                      }}>
+                      <View style={styles.foodInfo}>
+                        <Text style={styles.foodName}>{food.name}</Text>
+                        <Text style={styles.foodNutrition}>
+                          {Math.round(food.calories)} cal · {food.protein.toFixed(1)}p · {food.carbs.toFixed(1)}c · {food.fat.toFixed(1)}f
+                        </Text>
+                      </View>
+                      <Pressable
+                        style={styles.selectFoodButton}
+                        onPress={() => handleSavedFoodSelect(food)}
+                        hitSlop={8}>
+                        <Text style={styles.selectFoodButtonText}>+</Text>
+                      </Pressable>
+                    </Pressable>
+                  ))}
                 </View>
               )}
             </View>
@@ -546,4 +626,48 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Palette.darkGray,
   },
-});
+  emptyText: {
+    fontSize: 14,
+    color: Palette.gray,
+    textAlign: 'center',
+    paddingVertical: 24,
+  },
+  savedFoodsContainer: {
+    gap: 8,
+  },
+  savedFoodItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: Palette.lightGray2,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+  },
+  foodInfo: {
+    flex: 1,
+  },
+  foodName: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: Palette.darkGray,
+    marginBottom: 4,
+  },
+  foodNutrition: {
+    fontSize: 12,
+    color: Palette.gray,
+  },
+  selectFoodButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Palette.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 8,
+  },
+  selectFoodButtonText: {
+    color: '#fff',
+    fontSize: 20,
+    fontWeight: '600',
+  },});

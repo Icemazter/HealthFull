@@ -1,7 +1,8 @@
+import { BASIC_INGREDIENTS } from '@/constants/basic-ingredients';
 import { Palette } from '@/constants/theme';
 import { RecipeIngredient } from '@/utils/recipes';
 import { STORAGE_KEYS, storage } from '@/utils/storage';
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
     Alert,
     Keyboard,
@@ -15,27 +16,8 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-// Basic ingredients with average macros per 100g
-const BASIC_INGREDIENTS = [
-  { name: 'Egg', calories: 155, protein: 13, carbs: 1.1, fat: 11, fiber: 0, defaultWeight: 50 },
-  { name: 'Banana', calories: 89, protein: 1.1, carbs: 23, fat: 0.3, fiber: 2.6, defaultWeight: 100 },
-  { name: 'Chicken Breast', calories: 165, protein: 31, carbs: 0, fat: 3.6, fiber: 0, defaultWeight: 100 },
-  { name: 'Rice (cooked)', calories: 130, protein: 2.7, carbs: 28, fat: 0.3, fiber: 0.4, defaultWeight: 100 },
-  { name: 'Pasta (cooked)', calories: 131, protein: 5, carbs: 25, fat: 1.1, fiber: 1.8, defaultWeight: 100 },
-  { name: 'Oats', calories: 389, protein: 17, carbs: 66, fat: 7, fiber: 10.6, defaultWeight: 40 },
-  { name: 'Broccoli', calories: 34, protein: 2.8, carbs: 7, fat: 0.4, fiber: 2.4, defaultWeight: 100 },
-  { name: 'Sweet Potato', calories: 86, protein: 1.6, carbs: 20, fat: 0.1, fiber: 3, defaultWeight: 100 },
-  { name: 'Salmon', calories: 208, protein: 20, carbs: 0, fat: 13, fiber: 0, defaultWeight: 100 },
-  { name: 'Milk', calories: 61, protein: 3.2, carbs: 4.8, fat: 3.3, fiber: 0, defaultWeight: 100 },
-  { name: 'Almonds', calories: 579, protein: 21, carbs: 22, fat: 50, fiber: 12.5, defaultWeight: 28 },
-  { name: 'Apple', calories: 52, protein: 0.3, carbs: 14, fat: 0.2, fiber: 2.4, defaultWeight: 100 },
-  { name: 'Beef', calories: 250, protein: 26, carbs: 0, fat: 15, fiber: 0, defaultWeight: 100 },
-  { name: 'Peanut Butter', calories: 588, protein: 25, carbs: 20, fat: 50, fiber: 6, defaultWeight: 32 },
-  { name: 'Bread', calories: 265, protein: 9, carbs: 49, fat: 3.3, fiber: 2.7, defaultWeight: 30 },
-  { name: 'Olive Oil', calories: 884, protein: 0, carbs: 0, fat: 100, fiber: 0, defaultWeight: 14 },
-  { name: 'Yogurt', calories: 59, protein: 10, carbs: 3.3, fat: 0.4, fiber: 0, defaultWeight: 100 },
-  { name: 'Blueberries', calories: 57, protein: 0.7, carbs: 14, fat: 0.3, fiber: 2.4, defaultWeight: 100 },
-];
+// Utility for generating unique IDs
+const generateUniqueId = (prefix: string) => `${prefix}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
 interface IngredientSelectorProps {
   visible: boolean;
@@ -179,7 +161,7 @@ export const IngredientSelector = React.memo(function IngredientSelector({
     }
 
     const ingredient: RecipeIngredient = {
-      id: `ing_${Date.now()}_${Math.random()}`,
+      id: generateUniqueId('ing'),
       name: trimmedName,
       calories: parseFloat(calories.toFixed(2)),
       protein: parseFloat((parseFloat(manualProtein) || 0).toFixed(2)),
@@ -196,14 +178,26 @@ export const IngredientSelector = React.memo(function IngredientSelector({
     onCancel(); // Close the selector to return to recipe builder
   };
 
-  const handleSavedFoodSelect = (food: SavedFood) => {
+  const handleSavedFoodSelect = (food: SavedFood | null) => {
+    if (!food) {
+      Alert.alert('Error', 'Please select a food item');
+      return;
+    }
+
     const weight = useExactAmount 
       ? (food.weight || 100)
       : (parseFloat(selectedAmount) || 100);
+    
+    // Validate weight
+    if (weight <= 0 || isNaN(weight)) {
+      Alert.alert('Validation Error', 'Please enter a valid weight greater than 0g');
+      return;
+    }
+
     const multiplier = weight / 100;
 
     const ingredient: RecipeIngredient = {
-      id: `ing_${Date.now()}_${Math.random()}`,
+      id: generateUniqueId('ing'),
       name: food.name,
       calories: parseFloat((food.calories * multiplier).toFixed(2)),
       protein: parseFloat((food.protein * multiplier).toFixed(2)),
@@ -233,13 +227,16 @@ export const IngredientSelector = React.memo(function IngredientSelector({
     setSearchQuery('');
   };
 
-  const filteredSavedFoods = savedFoods.filter(food =>
-    food.name.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredSavedFoods = useMemo(
+    () => savedFoods.filter(food =>
+      food.name.toLowerCase().includes(searchQuery.toLowerCase())
+    ),
+    [savedFoods, searchQuery]
   );
 
   const handleBasicIngredientSelect = (basicIngredient: typeof BASIC_INGREDIENTS[0]) => {
     const ingredient: RecipeIngredient = {
-      id: `ing_${Date.now()}_${Math.random()}`,
+      id: generateUniqueId('ing'),
       name: basicIngredient.name,
       calories: parseFloat((basicIngredient.calories).toFixed(2)),
       protein: parseFloat((basicIngredient.protein).toFixed(2)),

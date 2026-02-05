@@ -1,4 +1,5 @@
 import { Palette } from '@/constants/theme';
+import { feedback } from '@/utils/feedback';
 import { Recipe, RecipeIngredient, removeIngredientFromRecipe } from '@/utils/recipes';
 import * as Haptics from 'expo-haptics';
 import React, { useEffect, useMemo, useState } from 'react';
@@ -115,6 +116,16 @@ export const RecipeBuilder = React.memo(function RecipeBuilder({
     setCurrentRecipe(recipe);
     onCancel();
   };
+
+  const handleRevertChanges = () => {
+    // Reset ingredients to original state
+    const reverted = { ...currentRecipe, ingredients: originalIngredients };
+    setCurrentRecipe(reverted);
+    feedback.success('Changes reverted');
+  };
+
+  const hasChanges = JSON.stringify(currentRecipe.ingredients) !== JSON.stringify(originalIngredients) || 
+                     recipeName !== recipe.name;
 
   const handleEditIngredient = (ingredient: RecipeIngredient) => {
     setEditingIngredient(ingredient);
@@ -283,6 +294,15 @@ export const RecipeBuilder = React.memo(function RecipeBuilder({
             autoCapitalize="words"
             maxLength={50}
           />
+
+          {hasChanges && (
+            <Pressable 
+              style={styles.revertButton} 
+              onPress={handleRevertChanges}
+              hitSlop={10}>
+              <Text style={styles.revertButtonText}>↻ Revert Changes</Text>
+            </Pressable>
+          )}
 
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
@@ -521,6 +541,21 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
     fontWeight: '600',
+  },
+  revertButton: {
+    backgroundColor: Palette.lightGray2,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+    marginVertical: 12,
+    borderWidth: 1,
+    borderColor: Palette.gray,
+    alignItems: 'center',
+  },
+  revertButtonText: {
+    color: Palette.darkGray,
+    fontSize: 14,
+    fontWeight: '500',
   },
   content: {
     flex: 1,

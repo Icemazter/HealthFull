@@ -153,22 +153,29 @@ export default function HomeScreen() {
   );
 
   const handleAddIngredient = useCallback(
-    (ingredient: RecipeIngredient) => {
-      // Haptic feedback
-      Haptics.selectionAsync();
-      
-      // Show success toast
-      feedback.success(`Added ${ingredient.name}!`);
-      
-      setCurrentRecipe(recipe => {
-        if (!recipe) return null;
-        const updated = addIngredientToRecipe(recipe, ingredient);
-        updateRecipe(updated);
-        return updated;
-      });
+    async (ingredient: RecipeIngredient) => {
+      try {
+        // Haptic feedback
+        await Haptics.selectionAsync();
+        
+        if (!currentRecipe) {
+          feedback.error('Recipe not loaded');
+          return;
+        }
+        
+        const updated = addIngredientToRecipe(currentRecipe, ingredient);
+        await updateRecipe(updated);
+        setCurrentRecipe(updated);
+        
+        // Show success toast
+        feedback.success(`Added ${ingredient.name}!`);
+      } catch (error) {
+        console.error('Error adding ingredient:', error);
+        feedback.error('Failed to add ingredient');
+      }
       // Keep selector open for adding more ingredients
     },
-    [updateRecipe]
+    [currentRecipe, updateRecipe]
   );
 
   useFocusEffect(
