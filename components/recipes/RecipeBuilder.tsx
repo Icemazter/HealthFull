@@ -1,19 +1,20 @@
 import { Palette } from '@/constants/theme';
 import { feedback } from '@/utils/feedback';
-import { Recipe, RecipeIngredient, removeIngredientFromRecipe } from '@/utils/recipes';
+import { MealPrep, Recipe, RecipeIngredient, removeIngredientFromRecipe } from '@/utils/recipes';
 import * as Haptics from 'expo-haptics';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  Alert,
-  Keyboard,
-  Modal, Platform, Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View
+    Alert,
+    Keyboard,
+    Modal, Platform, Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    View
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { MealPrepCreator } from './MealPrepCreator';
 
 interface RecipeBuilderProps {
   visible: boolean;
@@ -39,6 +40,7 @@ export const RecipeBuilder = React.memo(function RecipeBuilder({
   const [editingIngredient, setEditingIngredient] = useState<RecipeIngredient | null>(null);
   const [editingWeight, setEditingWeight] = useState('100');
   const [activeScale, setActiveScale] = useState<number | null>(null);
+  const [showMealPrepCreator, setShowMealPrepCreator] = useState(false);
   const isWeb = Platform.OS === 'web';
 
   // Only update baseline when modal opens, preserve it during editing
@@ -54,7 +56,11 @@ export const RecipeBuilder = React.memo(function RecipeBuilder({
   // Update when recipe prop changes while modal is open (e.g., when ingredients are added)
   useEffect(() => {
     if (visible && recipe.ingredients.length !== currentRecipe.ingredients.length) {
-      setCurrentRecipe(recipe);
+      // Clear stale mealpreps when ingredients change
+      const updatedRecipe = recipe.mealpreps && recipe.mealpreps.length > 0
+        ? { ...recipe, mealpreps: undefined }
+        : recipe;
+      setCurrentRecipe(updatedRecipe);
       setOriginalIngredients(recipe.ingredients.map(ing => ({ ...ing })));
     }
   }, [recipe, visible, currentRecipe.ingredients.length]);
@@ -71,7 +77,11 @@ export const RecipeBuilder = React.memo(function RecipeBuilder({
             if (!isWeb) {
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
             }
-            const updated = removeIngredientFromRecipe(currentRecipe, ingredientId);
+            let updated = removeIngredientFromRecipe(currentRecipe, ingredientId);
+            // Clear mealpreps since they reference stale ingredient data
+            if (updated.mealpreps && updated.mealpreps.length > 0) {
+              updated = { ...updated, mealpreps: undefined };
+            }
             setCurrentRecipe(updated);
             setOriginalIngredients(updated.ingredients.map(ing => ({ ...ing })));
             setActiveScale(null);
@@ -166,6 +176,7 @@ export const RecipeBuilder = React.memo(function RecipeBuilder({
       ...currentRecipe,
       ingredients: updatedIngredients,
       totalWeightInGrams: totalWeight,
+      mealpreps: undefined,
     };
 
     setCurrentRecipe(updated);
@@ -198,6 +209,7 @@ export const RecipeBuilder = React.memo(function RecipeBuilder({
       ...currentRecipe,
       ingredients: scaledIngredients,
       totalWeightInGrams: totalWeight,
+      mealpreps: undefined,
     };
 
     setCurrentRecipe(updated);
@@ -213,6 +225,7 @@ export const RecipeBuilder = React.memo(function RecipeBuilder({
       ...currentRecipe,
       ingredients: originalIngredients.map(ing => ({ ...ing })),
       totalWeightInGrams: totalWeight,
+      mealpreps: undefined,
     };
     setCurrentRecipe(resetRecipe);
     setActiveScale(null);
@@ -437,8 +450,45 @@ export const RecipeBuilder = React.memo(function RecipeBuilder({
                 </Text>
               </View>
             )}
+
+            {/* Mealprep Section */}
+            {currentRecipe.ingredients.length > 0 && (
+              <View style={styles.mealPrepSection}>
+                <Pressable
+                  style={styles.mealPrepButton}
+                  onPress={() => setShowMealPrepCreator(true)}>
+                  <Text style={styles.mealPrepButtonText}>
+                    {currentRecipe.mealpreps && currentRecipe.mealpreps.length > 0
+                      ? `Mealprep Boxes (${currentRecipe.mealpreps.length})`
+                      : '+ Add Mealprep'}
+                  </Text>
+                </Pressable>
+                {currentRecipe.mealpreps && currentRecipe.mealpreps.length > 0 && (
+                  <Text style={styles.mealPrepHint}>
+                    {currentRecipe.mealpreps.length} boxes · Tap to edit
+                  </Text>
+                )}
+              </View>
+            )}
           </ScrollView>
         </View>
+
+        {/* MealPrep Creator Modal */}
+        <MealPrepCreator
+          visible={showMealPrepCreator}
+          recipe={currentRecipe}
+          onSave={(mealpreps: MealPrep[]) => {
+            const updated = {
+              ...currentRecipe,
+              mealpreps: mealpreps.length > 0 ? mealpreps : undefined,
+              lastModified: Date.now(),
+            };
+            setCurrentRecipe(updated);
+            setShowMealPrepCreator(false);
+            if (onRecipeChange) onRecipeChange(updated);
+          }}
+          onCancel={() => setShowMealPrepCreator(false)}
+        />
 
         {/* Edit Ingredient Modal */}
         <Modal visible={!!editingIngredient} animationType="slide" transparent={false}>
@@ -872,5 +922,30 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: Palette.darkGray,
+  },
+  mealPrepSection: {
+    marginBottom: 24,
+    alignItems: 'center',
+  },
+  mealPrepButton: {
+    backgroundColor: '#f0f7ff',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: Palette.primary,
+    borderStyle: 'dashed',
+    width: '100%',
+    alignItems: 'center',
+  },
+  mealPrepButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: Palette.primary,
+  },
+  mealPrepHint: {
+    fontSize: 12,
+    color: Palette.gray,
+    marginTop: 6,
   },
 });

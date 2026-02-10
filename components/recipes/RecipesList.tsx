@@ -78,7 +78,10 @@ export const RecipesList = React.memo(function RecipesList({
                 <View style={styles.recipeContent}>
                   <Text style={styles.recipeName}>{recipe.name}</Text>
                   <Text style={styles.recipeInfo}>
-                    {recipe.ingredients.length} ingredients • {recipe.totalWeightInGrams}g total
+                    {recipe.ingredients.length} ingredients · {recipe.totalWeightInGrams}g total
+                    {recipe.mealpreps && recipe.mealpreps.length > 0
+                      ? ` · ${recipe.mealpreps.length} boxes`
+                      : ''}
                   </Text>
                 </View>
                 {!editMode && (

@@ -1,6 +1,6 @@
 import { Palette } from '@/constants/theme';
-import { portionRecipe, Recipe } from '@/utils/recipes';
-import React, { useState } from 'react';
+import { calculateMealPrepNutrition, portionRecipe, Recipe } from '@/utils/recipes';
+import React, { useMemo, useState } from 'react';
 import {
     Modal,
     Pressable,
@@ -34,64 +34,100 @@ export const RecipeLogger = React.memo(function RecipeLogger({
   onCancel,
 }: RecipeLoggerProps) {
   const insets = useSafeAreaInsets();
+  const hasMealpreps = (recipe.mealpreps?.length ?? 0) > 0;
+
+  // Logging mode: 'box' if mealpreps exist, 'portion' otherwise
+  const [mode, setMode] = useState<'box' | 'portion'>(hasMealpreps ? 'box' : 'portion');
+  const [selectedBoxId, setSelectedBoxId] = useState<string | null>(null);
   const [portionSize, setPortionSize] = useState(
     Math.round(recipe.totalWeightInGrams / 2).toString()
   );
   const [servings, setServings] = useState('1');
   const [mealType, setMealType] = useState<'Breakfast' | 'Lunch' | 'Dinner' | 'Snack'>('Lunch');
 
-  const handleLog = () => {
-    const portion = parseFloat(portionSize);
-    const numServings = parseFloat(servings) || 1;
-    
-    if (isNaN(portion) || portion <= 0) {
-      alert('Please enter a valid portion size (greater than 0g)');
-      return;
-    }
-    
-    if (portion > recipe.totalWeightInGrams) {
-      alert(`Portion size cannot exceed total recipe weight (${recipe.totalWeightInGrams}g)`);
-      return;
-    }
-    
-    if (isNaN(numServings) || numServings <= 0) {
-      alert('Please enter a valid number of servings (greater than 0)');
-      return;
-    }
+  const selectedBox = useMemo(
+    () => recipe.mealpreps?.find((mp) => mp.id === selectedBoxId) ?? null,
+    [recipe.mealpreps, selectedBoxId]
+  );
 
-    const totalNutrition = portionRecipe(recipe, portion);
-    
-    // Multiply by number of servings
-    const multipliedNutrition = {
-      calories: totalNutrition.calories * numServings,
-      protein: totalNutrition.protein * numServings,
-      carbs: totalNutrition.carbs * numServings,
-      fat: totalNutrition.fat * numServings,
-      fiber: totalNutrition.fiber * numServings,
-    };
+  const boxNutrition = useMemo(
+    () => (selectedBox ? calculateMealPrepNutrition(selectedBox) : null),
+    [selectedBox]
+  );
 
-    onLog({
-      name: `${recipe.name} (${Math.round(portion)}g${numServings > 1 ? ` × ${numServings}` : ''})`,
-      calories: Math.round(multipliedNutrition.calories),
-      protein: Math.round(multipliedNutrition.protein * 10) / 10,
-      carbs: Math.round(multipliedNutrition.carbs * 10) / 10,
-      fat: Math.round(multipliedNutrition.fat * 10) / 10,
-      fiber: Math.round(multipliedNutrition.fiber * 10) / 10,
-      mealType: mealType,
-    });
-  };
-
+  // Portion-mode nutrition (existing logic)
   const defaultPortion = Math.round(recipe.totalWeightInGrams / 2);
   const parsedPortion = parseFloat(portionSize);
   const actualPortion = isNaN(parsedPortion) || parsedPortion <= 0 ? defaultPortion : parsedPortion;
   const portioned = portionRecipe(recipe, actualPortion);
   const numServings = parseFloat(servings) || 1;
-  const totalNutrition = {
+  const portionNutrition = {
     calories: portioned.calories * numServings,
     protein: portioned.protein * numServings,
     carbs: portioned.carbs * numServings,
     fat: portioned.fat * numServings,
     fiber: portioned.fiber * numServings,
+  };
+
+  // The active nutrition to display
+  const displayNutrition = mode === 'box' && boxNutrition
+    ? boxNutrition
+    : portionNutrition;
+
+  const handleLog = () => {
+    if (mode === 'box') {
+      if (!selectedBox || !boxNutrition) {
+        alert('Please select a mealprep box');
+        return;
+      }
+
+      onLog({
+        name: `${recipe.name} (${selectedBox.label})`,
+        calories: Math.round(boxNutrition.calories),
+        protein: Math.round(boxNutrition.protein * 10) / 10,
+        carbs: Math.round(boxNutrition.carbs * 10) / 10,
+        fat: Math.round(boxNutrition.fat * 10) / 10,
+        fiber: Math.round(boxNutrition.fiber * 10) / 10,
+        mealType: mealType,
+      });
+    } else {
+      const portion = parseFloat(portionSize);
+      const srvs = parseFloat(servings) || 1;
+      
+      if (isNaN(portion) || portion <= 0) {
+        alert('Please enter a valid portion size (greater than 0g)');
+        return;
+      }
+      
+      if (portion > recipe.totalWeightInGrams) {
+        alert(`Portion size cannot exceed total recipe weight (${recipe.totalWeightInGrams}g)`);
+        return;
+      }
+      
+      if (isNaN(srvs) || srvs <= 0) {
+        alert('Please enter a valid number of servings (greater than 0)');
+        return;
+      }
+
+      const totalNutrition = portionRecipe(recipe, portion);
+      const multiplied = {
+        calories: totalNutrition.calories * srvs,
+        protein: totalNutrition.protein * srvs,
+        carbs: totalNutrition.carbs * srvs,
+        fat: totalNutrition.fat * srvs,
+        fiber: totalNutrition.fiber * srvs,
+      };
+
+      onLog({
+        name: `${recipe.name} (${Math.round(portion)}g${srvs > 1 ? ` × ${srvs}` : ''})`,
+        calories: Math.round(multiplied.calories),
+        protein: Math.round(multiplied.protein * 10) / 10,
+        carbs: Math.round(multiplied.carbs * 10) / 10,
+        fat: Math.round(multiplied.fat * 10) / 10,
+        fiber: Math.round(multiplied.fiber * 10) / 10,
+        mealType: mealType,
+      });
+    }
   };
 
   return (
@@ -112,42 +148,110 @@ export const RecipeLogger = React.memo(function RecipeLogger({
             <Text style={styles.recipeName}>{recipe.name}</Text>
             <Text style={styles.recipeNote}>
               Total: {recipe.totalWeightInGrams}g
+              {hasMealpreps ? ` · ${recipe.mealpreps!.length} boxes` : ''}
             </Text>
           </View>
 
-          <View style={styles.section}>
-            <Text style={styles.label}>Portion Size (grams)</Text>
-            <View style={styles.portionInputContainer}>
-              <TextInput
-                style={styles.portionInput}
-                value={portionSize}
-                onChangeText={setPortionSize}
-                placeholder="e.g., 500"
-                keyboardType="decimal-pad"
-                placeholderTextColor={Palette.gray}
-              />
-              <Text style={styles.portionMax}>
-                of {recipe.totalWeightInGrams}g
-              </Text>
+          {/* Mode toggle: only show if recipe has mealpreps */}
+          {hasMealpreps && (
+            <View style={styles.section}>
+              <View style={styles.modeToggleRow}>
+                <Pressable
+                  style={[styles.modeButton, mode === 'box' && styles.modeButtonActive]}
+                  onPress={() => setMode('box')}>
+                  <Text style={[styles.modeButtonText, mode === 'box' && styles.modeButtonTextActive]}>
+                    Mealprep Box
+                  </Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.modeButton, mode === 'portion' && styles.modeButtonActive]}
+                  onPress={() => setMode('portion')}>
+                  <Text style={[styles.modeButtonText, mode === 'portion' && styles.modeButtonTextActive]}>
+                    Custom Portion
+                  </Text>
+                </Pressable>
+              </View>
             </View>
-          </View>
+          )}
 
-          <View style={styles.section}>
-            <Text style={styles.label}>Number of Servings</Text>
-            <View style={styles.portionInputContainer}>
-              <TextInput
-                style={styles.portionInput}
-                value={servings}
-                onChangeText={setServings}
-                placeholder="1"
-                keyboardType="decimal-pad"
-                placeholderTextColor={Palette.gray}
-              />
-              <Text style={styles.portionMax}>
-                × this portion
-              </Text>
+          {/* Box selection mode */}
+          {mode === 'box' && hasMealpreps && (
+            <View style={styles.section}>
+              <Text style={styles.label}>Select a Box</Text>
+              {recipe.mealpreps!.map((mp) => {
+                const mpNutrition = calculateMealPrepNutrition(mp);
+                const isSelected = selectedBoxId === mp.id;
+
+                return (
+                  <Pressable
+                    key={mp.id}
+                    style={[styles.boxOption, isSelected && styles.boxOptionSelected]}
+                    onPress={() => setSelectedBoxId(mp.id)}>
+                    <View style={styles.boxOptionLeft}>
+                      <View style={[styles.boxRadio, isSelected && styles.boxRadioSelected]}>
+                        {isSelected && <View style={styles.boxRadioDot} />}
+                      </View>
+                      <View>
+                        <Text style={[styles.boxOptionLabel, isSelected && styles.boxOptionLabelSelected]}>
+                          {mp.label}
+                        </Text>
+                        <Text style={styles.boxOptionWeight}>
+                          {Math.round(mp.totalWeightInGrams)}g
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={styles.boxOptionRight}>
+                      <Text style={[styles.boxOptionCals, isSelected && styles.boxOptionCalsSelected]}>
+                        {Math.round(mpNutrition.calories)} kcal
+                      </Text>
+                      <Text style={styles.boxOptionMacros}>
+                        P:{mpNutrition.protein.toFixed(0)}g C:{mpNutrition.carbs.toFixed(0)}g F:{mpNutrition.fat.toFixed(0)}g
+                      </Text>
+                    </View>
+                  </Pressable>
+                );
+              })}
             </View>
-          </View>
+          )}
+
+          {/* Portion mode (existing) */}
+          {mode === 'portion' && (
+            <>
+              <View style={styles.section}>
+                <Text style={styles.label}>Portion Size (grams)</Text>
+                <View style={styles.portionInputContainer}>
+                  <TextInput
+                    style={styles.portionInput}
+                    value={portionSize}
+                    onChangeText={setPortionSize}
+                    placeholder="e.g., 500"
+                    keyboardType="decimal-pad"
+                    placeholderTextColor={Palette.gray}
+                  />
+                  <Text style={styles.portionMax}>
+                    of {recipe.totalWeightInGrams}g
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.section}>
+                <Text style={styles.label}>Number of Servings</Text>
+                <View style={styles.portionInputContainer}>
+                  <TextInput
+                    style={styles.portionInput}
+                    value={servings}
+                    onChangeText={setServings}
+                    placeholder="1"
+                    keyboardType="decimal-pad"
+                    placeholderTextColor={Palette.gray}
+                  />
+                  <Text style={styles.portionMax}>
+                    × this portion
+                  </Text>
+                </View>
+              </View>
+            </>
+          )}
 
           <View style={styles.section}>
             <Text style={styles.label}>Meal Type</Text>
@@ -168,54 +272,76 @@ export const RecipeLogger = React.memo(function RecipeLogger({
           </View>
 
           <View style={styles.nutritionSection}>
-            <Text style={styles.sectionTitle}>Scaled Nutrition</Text>
+            <Text style={styles.sectionTitle}>
+              {mode === 'box' && selectedBox
+                ? `${selectedBox.label} Nutrition`
+                : 'Scaled Nutrition'}
+            </Text>
             <View style={styles.nutritionGrid}>
               <View style={styles.nutriItem}>
                 <Text style={styles.nutriLabel}>Calories</Text>
                 <Text style={styles.nutriValue}>
-                  {Math.round(totalNutrition.calories)}
+                  {Math.round(displayNutrition.calories)}
                 </Text>
               </View>
               <View style={styles.nutriItem}>
                 <Text style={styles.nutriLabel}>Protein</Text>
                 <Text style={styles.nutriValue}>
-                  {Math.round(totalNutrition.protein * 10) / 10}g
+                  {Math.round(displayNutrition.protein * 10) / 10}g
                 </Text>
               </View>
               <View style={styles.nutriItem}>
                 <Text style={styles.nutriLabel}>Carbs</Text>
                 <Text style={styles.nutriValue}>
-                  {Math.round(totalNutrition.carbs * 10) / 10}g
+                  {Math.round(displayNutrition.carbs * 10) / 10}g
                 </Text>
               </View>
               <View style={styles.nutriItem}>
                 <Text style={styles.nutriLabel}>Fat</Text>
                 <Text style={styles.nutriValue}>
-                  {Math.round(totalNutrition.fat * 10) / 10}g
+                  {Math.round(displayNutrition.fat * 10) / 10}g
                 </Text>
               </View>
               <View style={styles.nutriItem}>
                 <Text style={styles.nutriLabel}>Fiber</Text>
                 <Text style={styles.nutriValue}>
-                  {Math.round(totalNutrition.fiber * 10) / 10}g
+                  {Math.round(displayNutrition.fiber * 10) / 10}g
                 </Text>
               </View>
             </View>
           </View>
 
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Ingredients ({recipe.ingredients.length})</Text>
-            {recipe.ingredients.map((ing) => (
-              <View key={ing.id} style={styles.ingredientItem}>
-                <View style={styles.ingredientDetails}>
-                  <Text style={styles.ingredientName}>{ing.name}</Text>
-                  <Text style={styles.ingredientWeight}>{ing.weightInGrams}g</Text>
+            <Text style={styles.sectionTitle2}>
+              {mode === 'box' && selectedBox
+                ? `${selectedBox.label} Ingredients (${selectedBox.ingredients.length})`
+                : `Ingredients (${recipe.ingredients.length})`}
+            </Text>
+            {mode === 'box' && selectedBox ? (
+              selectedBox.ingredients.map((ing) => (
+                <View key={ing.ingredientId} style={styles.ingredientItem}>
+                  <View style={styles.ingredientDetails}>
+                    <Text style={styles.ingredientName}>{ing.name}</Text>
+                    <Text style={styles.ingredientWeight}>{ing.weightInGrams}g</Text>
+                  </View>
+                  <Text style={styles.ingredientCals}>
+                    {Math.round(ing.calories)} kcal
+                  </Text>
                 </View>
-                <Text style={styles.ingredientCals}>
-                  {Math.round(ing.calories)} kcal
-                </Text>
-              </View>
-            ))}
+              ))
+            ) : (
+              recipe.ingredients.map((ing) => (
+                <View key={ing.id} style={styles.ingredientItem}>
+                  <View style={styles.ingredientDetails}>
+                    <Text style={styles.ingredientName}>{ing.name}</Text>
+                    <Text style={styles.ingredientWeight}>{ing.weightInGrams}g</Text>
+                  </View>
+                  <Text style={styles.ingredientCals}>
+                    {Math.round(ing.calories)} kcal
+                  </Text>
+                </View>
+              ))
+            )}
           </View>
         </ScrollView>
       </View>
@@ -320,6 +446,12 @@ const styles = StyleSheet.create({
     color: '#fff',
     marginBottom: 12,
   },
+  sectionTitle2: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Palette.darkGray,
+    marginBottom: 12,
+  },
   nutritionGrid: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -387,5 +519,99 @@ const styles = StyleSheet.create({
   },
   mealTypeButtonTextActive: {
     color: '#fff',
+  },
+  modeToggleRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  modeButton: {
+    flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    backgroundColor: Palette.lightGray2,
+    borderRadius: 8,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  modeButtonActive: {
+    backgroundColor: '#f0f7ff',
+    borderColor: Palette.primary,
+  },
+  modeButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Palette.gray,
+  },
+  modeButtonTextActive: {
+    color: Palette.primary,
+  },
+  boxOption: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: Palette.lightGray2,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    marginBottom: 8,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  boxOptionSelected: {
+    borderColor: Palette.primary,
+    backgroundColor: '#f0f7ff',
+  },
+  boxOptionLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  boxRadio: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    borderColor: Palette.gray,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  boxRadioSelected: {
+    borderColor: Palette.primary,
+  },
+  boxRadioDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: Palette.primary,
+  },
+  boxOptionLabel: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Palette.darkGray,
+  },
+  boxOptionLabelSelected: {
+    color: Palette.primary,
+  },
+  boxOptionWeight: {
+    fontSize: 12,
+    color: Palette.gray,
+    marginTop: 2,
+  },
+  boxOptionRight: {
+    alignItems: 'flex-end',
+  },
+  boxOptionCals: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Palette.darkGray,
+  },
+  boxOptionCalsSelected: {
+    color: Palette.primary,
+  },
+  boxOptionMacros: {
+    fontSize: 11,
+    color: Palette.gray,
+    marginTop: 2,
   },
 });
