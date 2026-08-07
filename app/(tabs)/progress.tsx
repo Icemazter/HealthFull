@@ -2,12 +2,17 @@ import { TrendChart } from '@/components/ui/trend-chart';
 import { Palette } from '@/constants/theme';
 import {
   buildWeightTrend,
+  calculateGoalPace,
   calculateDataQuality,
   calculateMacroAdherence,
+  calculateMeasurementChange,
   calculateWaistToHeight,
+  compareNutritionPeriods,
   estimateAdaptiveGuidance,
   forecastWeight,
   latestMeasurementByType,
+  summarizeDailyContext,
+  type DailyContextEntry,
   type MeasurementEntry,
   type NutritionEntry,
   type WeightEntry,
@@ -30,6 +35,7 @@ interface ProgressData {
   foods: NutritionEntry[];
   weights: WeightEntry[];
   measurements: MeasurementEntry[];
+  contexts: DailyContextEntry[];
   goals: Record<string, string | number>;
   heightCm: number;
 }
@@ -39,7 +45,7 @@ interface ProgressGoal {
   targetDate: string;
 }
 
-const defaultData: ProgressData = { foods: [], weights: [], measurements: [], goals: {}, heightCm: 0 };
+const defaultData: ProgressData = { foods: [], weights: [], measurements: [], contexts: [], goals: {}, heightCm: 0 };
 
 const filterRange = <T extends { timestamp: number }>(entries: T[], range: RangeDays) => {
   const threshold = Date.now() - range * 24 * 60 * 60 * 1000;
@@ -52,13 +58,15 @@ export default function ProgressScreen() {
   const [range, setRange] = useState<RangeDays>(90);
   const [measurementType, setMeasurementType] = useState('Waist');
   const [data, setData] = useState<ProgressData>(defaultData);
+  const [selectedWeightTimestamp, setSelectedWeightTimestamp] = useState<number | null>(null);
   const [progressGoal, setProgressGoal] = usePersistedState<ProgressGoal>(STORAGE_KEYS.PROGRESS_GOAL, { targetWeight: '', targetDate: '' });
 
   const loadProgress = useCallback(async () => {
-    const [foods, weights, measurements, goals, bodyStats] = await Promise.all([
+    const [foods, weights, measurements, contexts, goals, bodyStats] = await Promise.all([
       storage.get<NutritionEntry[]>(STORAGE_KEYS.FOOD_ENTRIES, []),
       storage.get<WeightEntry[]>(STORAGE_KEYS.WEIGHT_HISTORY, []),
       storage.get<MeasurementEntry[]>(STORAGE_KEYS.BODY_MEASUREMENTS, []),
+      storage.get<DailyContextEntry[]>(STORAGE_KEYS.DAILY_CONTEXT, []),
       storage.get<Record<string, string | number>>(STORAGE_KEYS.MACRO_GOALS, {}),
       storage.get<BodyStats>(STORAGE_KEYS.BODY_STATS, {}),
     ]);
@@ -66,6 +74,7 @@ export default function ProgressScreen() {
       foods: foods ?? [],
       weights: weights ?? [],
       measurements: measurements ?? [],
+      contexts: Array.isArray(contexts) ? contexts : [],
       goals: goals ?? {},
       heightCm: Number(bodyStats?.heightCm) || 0,
     });
@@ -97,6 +106,11 @@ export default function ProgressScreen() {
   const targetDate = new Date(progressGoal.targetDate);
   const goalDaysAway = !Number.isNaN(targetDate.getTime()) ? Math.ceil((targetDate.getTime() - Date.now()) / (24 * 60 * 60 * 1000)) : 0;
   const goalProjection = targetWeight > 0 && goalDaysAway > 0 ? forecastWeight(data.weights, goalDaysAway) : null;
+  const goalPace = targetWeight > 0 && goalDaysAway > 0 ? calculateGoalPace(data.weights, targetWeight, targetDate) : null;
+  const periodComparison = useMemo(() => compareNutritionPeriods(data.foods, range), [data.foods, range]);
+  const measurementChange = useMemo(() => calculateMeasurementChange(selectedMeasurements, measurementType), [selectedMeasurements, measurementType]);
+  const contextSummary = useMemo(() => summarizeDailyContext(filterRange(data.contexts, range)), [data.contexts, range]);
+  const selectedWeight = weightTrend.find((point) => point.timestamp === selectedWeightTimestamp);
 
   const statCards = [
     { value: macro.loggedDays, label: 'Days Logged' },
@@ -134,7 +148,19 @@ export default function ProgressScreen() {
       <View style={[styles.card, isDark && styles.cardDark]}>
         <Text style={[styles.cardTitle, isDark && styles.textDark]}>Weight trend</Text>
         <Text style={[styles.description, isDark && styles.mutedDark]}>Open circles are weigh-ins; solid points show your 7-day rolling average.</Text>
-        <TrendChart points={weightTrend} color="#2563eb" unit=" kg" isDark={isDark} />
+        <TrendChart
+          points={weightTrend}
+          color="#2563eb"
+          unit=" kg"
+          isDark={isDark}
+          selectedTimestamp={selectedWeightTimestamp}
+          onPointPress={(point) => setSelectedWeightTimestamp(point.timestamp)}
+        />
+        {selectedWeight && (
+          <Text style={[styles.pointDetail, isDark && styles.mutedDark]}>
+            {new Date(selectedWeight.timestamp).toLocaleDateString()}: {selectedWeight.value.toFixed(1)} kg, 7-day average {selectedWeight.trend.toFixed(1)} kg.
+          </Text>
+        )}
         {projection ? (
           <View style={[styles.insight, isDark && styles.insightDark]}>
             <Text style={[styles.insightTitle, isDark && styles.textDark]}>28-day estimate</Text>
@@ -181,6 +207,11 @@ export default function ProgressScreen() {
         ) : (
           <Text style={[styles.helpText, isDark && styles.mutedDark]}>Enter a future ISO date and log at least 7 weigh-ins to compare your trajectory.</Text>
         )}
+        {goalPace && (
+          <Text style={[styles.helpText, isDark && styles.mutedDark]}>
+            Pace: {goalPace.status.replace('-', ' ')}. Your trend is {goalPace.currentWeeklyRateKg.toFixed(2)} kg/week; this goal needs {goalPace.requiredWeeklyRateKg.toFixed(2)} kg/week.
+          </Text>
+        )}
       </View>
 
       <View style={[styles.card, isDark && styles.cardDark]}>
@@ -196,6 +227,29 @@ export default function ProgressScreen() {
             <Text style={[styles.macroPercent, isDark && styles.mutedDark]}>{macro.adherence[key]}%</Text>
           </View>
         ))}
+      </View>
+
+      <View style={[styles.card, isDark && styles.cardDark]}>
+        <Text style={[styles.cardTitle, isDark && styles.textDark]}>Nutrition change</Text>
+        <Text style={[styles.description, isDark && styles.mutedDark]}>Average daily intake in this period compared with the previous {range} days.</Text>
+        {periodComparison.previousLoggedDays > 0 ? (
+          <View style={styles.comparisonGrid}>
+            <View style={[styles.comparisonItem, isDark && styles.comparisonItemDark]}>
+              <Text style={[styles.comparisonValue, isDark && styles.textDark]}>{periodComparison.calorieChange! >= 0 ? '+' : ''}{periodComparison.calorieChange} kcal</Text>
+              <Text style={[styles.comparisonLabel, isDark && styles.mutedDark]}>Calories/day</Text>
+            </View>
+            <View style={[styles.comparisonItem, isDark && styles.comparisonItemDark]}>
+              <Text style={[styles.comparisonValue, isDark && styles.textDark]}>{periodComparison.proteinChange! >= 0 ? '+' : ''}{periodComparison.proteinChange} g</Text>
+              <Text style={[styles.comparisonLabel, isDark && styles.mutedDark]}>Protein/day</Text>
+            </View>
+            <View style={[styles.comparisonItem, isDark && styles.comparisonItemDark]}>
+              <Text style={[styles.comparisonValue, isDark && styles.textDark]}>{periodComparison.fiberChange! >= 0 ? '+' : ''}{periodComparison.fiberChange} g</Text>
+              <Text style={[styles.comparisonLabel, isDark && styles.mutedDark]}>Fiber/day</Text>
+            </View>
+          </View>
+        ) : (
+          <Text style={[styles.helpText, isDark && styles.mutedDark]}>Log food across two periods to compare changes.</Text>
+        )}
       </View>
 
       <View style={[styles.card, isDark && styles.cardDark]}>
@@ -234,12 +288,44 @@ export default function ProgressScreen() {
               ))}
             </View>
             <TrendChart points={selectedMeasurements} color="#16a34a" unit=" cm" isDark={isDark} />
+            {measurementChange && (
+              <Text style={[styles.helpText, isDark && styles.mutedDark]}>
+                {measurementType} changed {measurementChange.change >= 0 ? '+' : ''}{measurementChange.change.toFixed(1)} cm over {measurementChange.daysBetween} days.
+              </Text>
+            )}
           </>
         ) : (
           <Text style={[styles.helpText, isDark && styles.mutedDark]}>Log circumference measurements to compare changes beyond the scale.</Text>
         )}
         {waistToHeight && (
           <Text style={[styles.helpText, isDark && styles.mutedDark]}>Waist-to-height ratio: {waistToHeight.toFixed(2)}. This is a screening measure, not a diagnosis.</Text>
+        )}
+      </View>
+
+      <View style={[styles.card, isDark && styles.cardDark]}>
+        <Text style={[styles.cardTitle, isDark && styles.textDark]}>Daily context summary</Text>
+        {contextSummary.entries > 0 ? (
+          <>
+            <Text style={[styles.description, isDark && styles.mutedDark]}>
+              {contextSummary.entries} context entries in this range{contextSummary.averageSleepHours ? `; average sleep ${contextSummary.averageSleepHours.toFixed(1)} hours.` : '.'}
+            </Text>
+            <View style={styles.comparisonGrid}>
+              <View style={[styles.comparisonItem, isDark && styles.comparisonItemDark]}>
+                <Text style={[styles.comparisonValue, isDark && styles.textDark]}>{contextSummary.highStressDays}</Text>
+                <Text style={[styles.comparisonLabel, isDark && styles.mutedDark]}>High-stress days</Text>
+              </View>
+              <View style={[styles.comparisonItem, isDark && styles.comparisonItemDark]}>
+                <Text style={[styles.comparisonValue, isDark && styles.textDark]}>{contextSummary.highHungerDays}</Text>
+                <Text style={[styles.comparisonLabel, isDark && styles.mutedDark]}>High-hunger days</Text>
+              </View>
+              <View style={[styles.comparisonItem, isDark && styles.comparisonItemDark]}>
+                <Text style={[styles.comparisonValue, isDark && styles.textDark]}>{contextSummary.uncomfortableDigestionDays}</Text>
+                <Text style={[styles.comparisonLabel, isDark && styles.mutedDark]}>Digestive discomfort</Text>
+              </View>
+            </View>
+          </>
+        ) : (
+          <Text style={[styles.helpText, isDark && styles.mutedDark]}>Save daily context in Measurements to see it summarized here.</Text>
         )}
       </View>
     </ScrollView>
@@ -283,6 +369,12 @@ const styles = StyleSheet.create({
   measurementTypes: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 16, marginBottom: 12 },
   measurementChip: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 16, backgroundColor: '#e2e8f0' },
   guidanceValue: { fontSize: 18, fontWeight: '700', color: '#111827', marginTop: 4 },
+  pointDetail: { marginTop: 12, color: '#64748b', fontSize: 13 },
+  comparisonGrid: { flexDirection: 'row', gap: 8 },
+  comparisonItem: { flex: 1, padding: 12, borderRadius: 10, backgroundColor: '#e2e8f0' },
+  comparisonItemDark: { backgroundColor: '#1e293b' },
+  comparisonValue: { color: '#111827', fontSize: 16, fontWeight: '700' },
+  comparisonLabel: { marginTop: 4, color: '#64748b', fontSize: 11, lineHeight: 14 },
   goalInputRow: { flexDirection: 'row', gap: 12 },
   goalInputGroup: { flex: 1 },
   goalLabel: { marginBottom: 6, color: '#64748b', fontSize: 13, fontWeight: '600' },

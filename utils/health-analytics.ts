@@ -66,6 +66,44 @@ export interface DataQuality {
   coveragePercent: number;
 }
 
+export interface DailyContextEntry {
+  timestamp: number;
+  sleepHours?: string | number;
+  hunger?: 'Low' | 'Moderate' | 'High';
+  stress?: 'Low' | 'Moderate' | 'High';
+  digestion?: 'Comfortable' | 'Mixed' | 'Uncomfortable';
+  note?: string;
+}
+
+export interface PeriodComparison {
+  currentLoggedDays: number;
+  previousLoggedDays: number;
+  calorieChange: number | null;
+  proteinChange: number | null;
+  fiberChange: number | null;
+}
+
+export interface GoalPace {
+  requiredWeeklyRateKg: number;
+  currentWeeklyRateKg: number;
+  status: 'ahead' | 'on-track' | 'behind';
+}
+
+export interface MeasurementChange {
+  change: number;
+  daysBetween: number;
+  firstValue: number;
+  latestValue: number;
+}
+
+export interface ContextSummary {
+  entries: number;
+  averageSleepHours: number | null;
+  highStressDays: number;
+  highHungerDays: number;
+  uncomfortableDigestionDays: number;
+}
+
 const dayMilliseconds = 24 * 60 * 60 * 1000;
 
 export const startOfDay = (timestamp: number) => {
@@ -238,5 +276,73 @@ export const calculateDataQuality = (
     weighIns: weightEntries.filter((entry) => toNumber(entry.weight) > 0).length,
     measurementEntries: measurementEntries.filter((entry) => toNumber(entry.value) > 0).length,
     coveragePercent,
+  };
+};
+
+export const compareNutritionPeriods = (entries: NutritionEntry[], rangeDays: number): PeriodComparison => {
+  const now = startOfDay(Date.now());
+  const currentStart = now - (rangeDays - 1) * dayMilliseconds;
+  const previousStart = currentStart - rangeDays * dayMilliseconds;
+  const current = entries.filter((entry) => entry.timestamp >= currentStart && entry.timestamp <= now + dayMilliseconds);
+  const previous = entries.filter((entry) => entry.timestamp >= previousStart && entry.timestamp < currentStart);
+  const currentSummary = calculateMacroAdherence(current, { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 });
+  const previousSummary = calculateMacroAdherence(previous, { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 });
+  const change = (currentValue: number, previousValue: number) => previousSummary.loggedDays > 0 ? Math.round(currentValue - previousValue) : null;
+
+  return {
+    currentLoggedDays: currentSummary.loggedDays,
+    previousLoggedDays: previousSummary.loggedDays,
+    calorieChange: change(currentSummary.average.calories, previousSummary.average.calories),
+    proteinChange: change(currentSummary.average.protein, previousSummary.average.protein),
+    fiberChange: change(currentSummary.average.fiber, previousSummary.average.fiber),
+  };
+};
+
+export const calculateGoalPace = (
+  weights: WeightEntry[],
+  targetWeight: number,
+  targetDate: Date
+): GoalPace | null => {
+  const trend = buildWeightTrend(weights);
+  const forecast = forecastWeight(weights, 7);
+  const daysRemaining = Math.ceil((targetDate.getTime() - Date.now()) / dayMilliseconds);
+  if (!forecast || trend.length === 0 || !Number.isFinite(targetWeight) || daysRemaining <= 0) return null;
+
+  const requiredWeeklyRateKg = (targetWeight - trend[trend.length - 1].trend) * 7 / daysRemaining;
+  const difference = forecast.weeklyRateKg - requiredWeeklyRateKg;
+  const directionAligned = requiredWeeklyRateKg === 0 || Math.sign(forecast.weeklyRateKg) === Math.sign(requiredWeeklyRateKg);
+  const status = directionAligned && Math.abs(difference) <= 0.08
+    ? 'on-track'
+    : Math.abs(forecast.weeklyRateKg) >= Math.abs(requiredWeeklyRateKg)
+      ? 'ahead'
+      : 'behind';
+  return { requiredWeeklyRateKg, currentWeeklyRateKg: forecast.weeklyRateKg, status };
+};
+
+export const calculateMeasurementChange = (entries: MeasurementEntry[], type: string): MeasurementChange | null => {
+  const values = entries
+    .filter((entry) => entry.type === type && toNumber(entry.value) > 0)
+    .map((entry) => ({ timestamp: entry.timestamp, value: toNumber(entry.value) }))
+    .sort((a, b) => a.timestamp - b.timestamp);
+  if (values.length < 2) return null;
+  const first = values[0];
+  const latest = values[values.length - 1];
+  return {
+    change: latest.value - first.value,
+    daysBetween: Math.max(1, Math.round((latest.timestamp - first.timestamp) / dayMilliseconds)),
+    firstValue: first.value,
+    latestValue: latest.value,
+  };
+};
+
+export const summarizeDailyContext = (entries: DailyContextEntry[]): ContextSummary => {
+  const validEntries = entries.filter((entry) => Number.isFinite(entry.timestamp));
+  const sleepValues = validEntries.map((entry) => toNumber(entry.sleepHours)).filter((value) => value > 0);
+  return {
+    entries: validEntries.length,
+    averageSleepHours: sleepValues.length ? sleepValues.reduce((total, value) => total + value, 0) / sleepValues.length : null,
+    highStressDays: validEntries.filter((entry) => entry.stress === 'High').length,
+    highHungerDays: validEntries.filter((entry) => entry.hunger === 'High').length,
+    uncomfortableDigestionDays: validEntries.filter((entry) => entry.digestion === 'Uncomfortable').length,
   };
 };

@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 interface TrendChartPoint {
   timestamp: number;
@@ -12,9 +12,11 @@ interface TrendChartProps {
   unit: string;
   isDark: boolean;
   height?: number;
+  selectedTimestamp?: number | null;
+  onPointPress?: (point: TrendChartPoint) => void;
 }
 
-export function TrendChart({ points, color, unit, isDark, height = 150 }: TrendChartProps) {
+export function TrendChart({ points, color, unit, isDark, height = 150, selectedTimestamp, onPointPress }: TrendChartProps) {
   if (points.length < 2) {
     return <Text style={[styles.empty, isDark && styles.emptyDark]}>Add at least two entries to begin a trend.</Text>;
   }
@@ -33,10 +35,15 @@ export function TrendChart({ points, color, unit, isDark, height = 150 }: TrendC
           const rawBottom = ((point.value - min) / range) * 100;
           const trendBottom = (((point.trend ?? point.value) - min) / range) * 100;
           return (
-            <View key={`${point.timestamp}-${index}`} style={styles.pointColumn}>
+            <Pressable
+              key={`${point.timestamp}-${index}`}
+              accessibilityRole="button"
+              accessibilityLabel={`${new Date(point.timestamp).toLocaleDateString()}: ${point.value.toFixed(1)}${unit}`}
+              onPress={() => onPointPress?.(point)}
+              style={[styles.pointColumn, selectedTimestamp === point.timestamp && styles.selectedColumn]}>
               <View style={[styles.trendPoint, { bottom: `${trendBottom}%`, backgroundColor: color }]} />
               <View style={[styles.rawPoint, { bottom: `${rawBottom}%`, borderColor: color }]} />
-            </View>
+            </Pressable>
           );
         })}
       </View>
@@ -49,6 +56,7 @@ const styles = StyleSheet.create({
   chartDark: { backgroundColor: '#262626' },
   plot: { flex: 1, flexDirection: 'row', alignItems: 'stretch', justifyContent: 'space-around', borderBottomWidth: 1, borderLeftWidth: 1, borderColor: '#cbd5e1' },
   pointColumn: { flex: 1, position: 'relative', minWidth: 4 },
+  selectedColumn: { backgroundColor: 'rgba(37, 99, 235, 0.12)' },
   rawPoint: { position: 'absolute', left: '50%', width: 8, height: 8, borderRadius: 4, backgroundColor: '#fff', borderWidth: 2, marginLeft: -4 },
   trendPoint: { position: 'absolute', left: '50%', width: 5, height: 5, borderRadius: 3, marginLeft: -2.5 },
   axisLabel: { position: 'absolute', left: 5, color: '#64748b', fontSize: 11 },
