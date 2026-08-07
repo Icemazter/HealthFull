@@ -53,6 +53,13 @@ export function useHistoryManager<T extends { timestamp: number }>(storageKey: s
     [setHistory]
   );
 
+  const addOrReplace = useCallback(
+    async (entry: T, shouldReplace: (existing: T) => boolean) => {
+      await setHistory((previous) => [entry, ...previous.filter((existing) => !shouldReplace(existing))]);
+    },
+    [setHistory]
+  );
+
   const remove = useCallback(
     async (timestamp: number) => {
       await setHistory((prev) => prev.filter((e) => e.timestamp !== timestamp));
@@ -64,5 +71,5 @@ export function useHistoryManager<T extends { timestamp: number }>(storageKey: s
     await setHistory([]);
   }, [setHistory]);
 
-  return { history, add, remove, clear };
+  return { history, add, addOrReplace, remove, clear };
 }

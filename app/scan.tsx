@@ -22,7 +22,10 @@ interface FoodData {
   nutrients: NutrientData;
   imageUrl?: string;
   servingSize?: number; // in grams or ml depending on unit
-  unit?: 'g' | 'ml'; // Whether nutrition is per 100g or 100ml
+  unit?: 'g' | 'ml'; // Nutrition label basis: per 100g or per 100ml
+  nutritionUnitVerified?: boolean;
+  barcode?: string;
+  missingNutritionFields?: string[];
 }
 
 type VolumeUnit = 'g' | 'ml' | 'dl' | 'tbsp' | 'tsp';
@@ -36,6 +39,8 @@ export default function ScanScreen() {
   const [loading, setLoading] = useState(false);
   const [lastScanTime, setLastScanTime] = useState(0);
   const [cameraKey, setCameraKey] = useState(0);
+  const [nativeCameraState, setNativeCameraState] = useState<'loading' | 'permission-needed' | 'ready' | 'unavailable' | 'error'>('loading');
+  const [nativeCameraError, setNativeCameraError] = useState<string | null>(null);
   const [foodData, setFoodData] = useState<FoodData | null>(null);
   const [showOptions, setShowOptions] = useState(false);
   const [customAmount, setCustomAmount] = useState('100');
@@ -59,6 +64,7 @@ export default function ScanScreen() {
   const webScannerRunningRef = useRef(false);
   const webScannerControlsRef = useRef<any>(null);
   const [webScannerActive, setWebScannerActive] = useState(false);
+  const [webCameraError, setWebCameraError] = useState<string | null>(null);
   const [isWeb] = useState(Platform.OS === 'web');
   const [showManualEntry, setShowManualEntry] = useState(false);
 
@@ -86,7 +92,7 @@ export default function ScanScreen() {
   ).current;
 
   useEffect(() => {
-    // Initialize web camera if on web platform
+    // On web, wait for the user to request scanning so mobile browsers permit camera access.
     if (isWeb) {
       initWebCamera();
     }
@@ -114,12 +120,6 @@ export default function ScanScreen() {
     };
   }, [isWeb]);
 
-  useEffect(() => {
-    if (isWeb && permission?.granted) {
-      initWebCamera();
-    }
-  }, [isWeb, permission?.granted]);
-
   // Reset scanned state when screen comes into focus
   useFocusEffect(
     useCallback(() => {
@@ -127,15 +127,16 @@ export default function ScanScreen() {
       setLoading(false);
       setCameraKey((prev) => prev + 1);
       
-      // Request camera permission only if not yet decided (not granted and not denied)
-      // The permission hook caches the result, so we only ask once
-      if (!isWeb && permission && permission.status !== 'granted' && permission.status !== 'denied') {
-        requestPermission();
-      }
-      
-      // Restart web scanning if needed
-      if (isWeb && !webScannerRunningRef.current) {
-        startBarcodeScanning();
+      if (!isWeb && permission) {
+        if (permission.granted) {
+          setNativeCameraState('ready');
+          setNativeCameraError(null);
+        } else if (permission.canAskAgain) {
+          setNativeCameraState('permission-needed');
+        } else {
+          setNativeCameraState('unavailable');
+          setNativeCameraError('Camera access is disabled for HealthFull. Enable it in your phone Settings, then return here.');
+        }
       }
       
       return () => {
@@ -147,6 +148,21 @@ export default function ScanScreen() {
     }, [isWeb, permission, requestPermission])
   );
 
+  const requestNativeCameraPermission = async () => {
+    setNativeCameraState('loading');
+    const result = await requestPermission();
+    if (result.granted) {
+      setNativeCameraState('ready');
+      setNativeCameraError(null);
+      setCameraKey((previous) => previous + 1);
+      return;
+    }
+    setNativeCameraState(result.canAskAgain ? 'permission-needed' : 'unavailable');
+    setNativeCameraError(result.canAskAgain
+      ? 'Camera access is required to scan barcodes.'
+      : 'Camera access is disabled for HealthFull. Enable it in your phone Settings, then return here.');
+  };
+
   // Utility to ensure nutrition data has valid defaults
   const ensureNutritionDefaults = (nutrients: Partial<NutrientData>): NutrientData => {
     return {
@@ -156,6 +172,13 @@ export default function ScanScreen() {
       fat: nutrients.fat ?? 0,
       fiber: nutrients.fiber ?? 0,
     };
+  };
+
+  const showFoodOptions = (food: FoodData) => {
+    setFoodData(food);
+    setServingSize(formatAmount(food.servingSize || 100));
+    setUnitType(food.unit || 'g');
+    setShowOptions(true);
   };
 
   // Format amount for display (remove decimals if whole number)
@@ -360,10 +383,9 @@ export default function ScanScreen() {
         await feedback.alert('Camera Access Denied', 'Please enable camera access in your browser settings to scan barcodes.');
         return;
       }
-      // Start scanning for barcodes (web)
-      startBarcodeScanning();
+      setWebCameraError(null);
     } catch (error) {
-      await feedback.alert('Camera Error', 'Could not access camera. Please check permissions in your browser settings.');
+      setWebCameraError('Camera access is unavailable in this browser. You can still add food manually.');
     }
   };
 
@@ -372,6 +394,12 @@ export default function ScanScreen() {
 
     const startWebScanner = async () => {
       try {
+        if (!window.isSecureContext) {
+          setWebCameraError('Camera scanning requires HTTPS on a phone browser. Use Manual Entry here, or open the app through Expo Go.');
+          return;
+        }
+
+        setWebCameraError(null);
         const module = await import('@zxing/library');
         const { BrowserMultiFormatReader, BarcodeFormat, DecodeHintType } = module as typeof import('@zxing/library');
 
@@ -419,6 +447,7 @@ export default function ScanScreen() {
       } catch (err) {
         webScannerRunningRef.current = false;
         setWebScannerActive(false);
+        setWebCameraError('Camera access was blocked. Allow camera access in your browser settings, then try again.');
       }
     };
 
@@ -444,25 +473,37 @@ export default function ScanScreen() {
     }
   };
 
-  if (!permission) {
+  if (!isWeb && !permission) {
     return <View style={styles.container}><Text>Loading...</Text></View>;
   }
 
-  if (!permission.granted) {
+  if (!isWeb && nativeCameraState !== 'ready') {
     return (
       <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', padding: 20 }]}>
         <Text style={[styles.message, { marginBottom: 20, textAlign: 'center', fontSize: 16, fontWeight: '600' }]}>
-          📷 Camera Permission Required
+          {nativeCameraState === 'loading' ? 'Preparing camera...' : 'Camera access needed'}
         </Text>
         <Text style={[styles.message, { marginBottom: 30, textAlign: 'center', fontSize: 14, opacity: 0.7 }]}>
-          HealthFull needs camera access to scan product barcodes and look up nutrition information.
+          {nativeCameraError ?? 'HealthFull needs camera access to scan product barcodes and look up nutrition information.'}
         </Text>
-        <Pressable style={[styles.button, { backgroundColor: '#FF3B30', paddingVertical: 14, width: '100%' }]} onPress={requestPermission}>
-          <Text style={[styles.buttonText, { fontSize: 16, fontWeight: 'bold' }]}>✓ Grant Camera Access</Text>
+        {nativeCameraState !== 'unavailable' && (
+          <Pressable style={[styles.button, { backgroundColor: '#FF3B30', paddingVertical: 14, width: '100%', marginBottom: 12 }]} onPress={requestNativeCameraPermission}>
+            <Text style={[styles.buttonText, { fontSize: 16, fontWeight: 'bold' }]}>Enable Camera</Text>
+          </Pressable>
+        )}
+        <Pressable style={[styles.button, { paddingVertical: 14, width: '100%' }]} onPress={() => setShowManualEntry(true)}>
+          <Text style={[styles.buttonText, { fontSize: 16, fontWeight: 'bold' }]}>Add Food Manually</Text>
         </Pressable>
-        <Text style={[styles.message, { marginTop: 20, textAlign: 'center', fontSize: 12, opacity: 0.6 }]}>
-          You can change this later in Settings
-        </Text>
+        <ManualEntryModal
+          visible={showManualEntry}
+          onCancel={() => setShowManualEntry(false)}
+          onAdd={async (entry) => {
+            const entries = (await storage.get<any[]>(STORAGE_KEYS.FOOD_ENTRIES, [])) ?? [];
+            await storage.set(STORAGE_KEYS.FOOD_ENTRIES, [...entries, entry]);
+            setShowManualEntry(false);
+            router.back();
+          }}
+        />
       </View>
     );
   }
@@ -487,6 +528,12 @@ export default function ScanScreen() {
       }
       
       const data = result.data;
+      const cachedProducts = (await storage.get<Record<string, FoodData>>(STORAGE_KEYS.BARCODE_CACHE, {})) ?? {};
+      const cachedFood = cachedProducts[data];
+      if (cachedFood) {
+        showFoodOptions(cachedFood);
+        return;
+      }
 
       // Fetch from OpenFoodFacts API with timeout
       const controller = new AbortController();
@@ -494,7 +541,7 @@ export default function ScanScreen() {
       
       let response;
       try {
-        response = await fetch(`https://world.openfoodfacts.org/api/v2/product/${data}.json`, {
+        response = await fetch(`https://world.openfoodfacts.org/api/v2/product/${data}.json?fields=product_name,product_name_sv,product_name_en,nutriments,image_front_url,image_url,serving_quantity,nutrition_data_per`, {
           signal: controller.signal,
         });
       } catch (fetchError) {
@@ -536,38 +583,39 @@ export default function ScanScreen() {
         const product = json.product;
         const nutrients = product.nutriments || {};
         
-        // Detect if product is liquid (milk, juice, etc.)
-        const categories = (product.categories_tags || []).join('|').toLowerCase();
-        const isLiquid = categories.includes('milk') || 
-                        categories.includes('juice') || 
-                        categories.includes('beverage') ||
-                        categories.includes('drink') ||
-                        categories.includes('yogurt') ||
-                        categories.includes('liquid') ||
-                        product.product_name?.toLowerCase().includes('milk') ||
-                        product.product_name?.toLowerCase().includes('juice') ||
-                        product.product_name?.toLowerCase().includes('drink');
-        
-        const productUnit = isLiquid ? 'ml' : 'g';
+        const nutritionBasis = product.nutrition_data_per;
+        const productUnit: 'g' | 'ml' = nutritionBasis === '100ml' ? 'ml' : 'g';
 
+        const energyKcal = Number(nutrients['energy-kcal_100g'] ?? nutrients['energy-kcal']);
+        const energyKj = Number(nutrients.energy_100g ?? nutrients.energy);
+        const nutritionValues = {
+          calories: Number.isFinite(energyKcal) && energyKcal > 0 ? energyKcal : Number.isFinite(energyKj) && energyKj > 0 ? energyKj / 4.184 : 0,
+          protein: Number(nutrients['proteins_100g'] ?? nutrients.proteins) || 0,
+          carbs: Number(nutrients['carbohydrates_100g'] ?? nutrients.carbohydrates) || 0,
+          fat: Number(nutrients['fat_100g'] ?? nutrients.fat) || 0,
+          fiber: Number(nutrients['fiber_100g'] ?? nutrients['fibers_100g'] ?? nutrients.fiber ?? nutrients.fibers) || 0,
+        };
+        const missingNutritionFields = [
+          nutritionValues.calories <= 0 && 'energy',
+          nutrients['proteins_100g'] === undefined && nutrients.proteins === undefined && 'protein',
+          nutrients['carbohydrates_100g'] === undefined && nutrients.carbohydrates === undefined && 'carbohydrates',
+          nutrients['fat_100g'] === undefined && nutrients.fat === undefined && 'fat',
+        ].filter((field): field is string => Boolean(field));
         const food: FoodData = {
-          name: product.product_name || 'Unknown Product',
+          name: product.product_name_sv || product.product_name || product.product_name_en || 'Unknown Product',
           nutrients: {
-            calories: nutrients['energy-kcal_100g'] || nutrients['energy-kcal'] || 0,
-            protein: nutrients['proteins_100g'] || nutrients.proteins || 0,
-            carbs: nutrients['carbohydrates_100g'] || nutrients.carbohydrates || 0,
-            fat: nutrients['fat_100g'] || nutrients.fat || 0,
-            fiber: nutrients['fiber_100g'] || nutrients['fibers_100g'] || nutrients.fiber || nutrients.fibers || 0,
+            ...nutritionValues,
           },
           imageUrl: product.image_front_url || product.image_url,
           servingSize: product.serving_quantity || 100, // Use API serving size or default to 100
-          unit: productUnit, // Track if nutrition is per 100g or 100ml
+          unit: productUnit,
+          nutritionUnitVerified: nutritionBasis === '100g' || nutritionBasis === '100ml',
+          barcode: data,
+          missingNutritionFields,
         };
 
-        setFoodData(food);
-        setServingSize(formatAmount(food.servingSize || 100));
-        setUnitType(productUnit); // Set initial unit based on product type
-        setShowOptions(true);
+        await storage.set(STORAGE_KEYS.BARCODE_CACHE, { ...cachedProducts, [data]: food });
+        showFoodOptions(food);
       } else {
         // Error feedback
         if (!isWeb) {
@@ -598,12 +646,18 @@ export default function ScanScreen() {
     }
   };
 
-  const saveFood = async (totalGrams: number = 0) => {
+  const saveFood = async (amount: number, amountUnit: VolumeUnit) => {
     if (!foodData) return;
 
     try {
-      const totalWeight = totalGrams > 0 ? totalGrams : parseFloat(customAmount) || 100;
-      const multiplier = totalWeight / 100; // Convert grams to 100g units
+      const density = estimateDensity(foodData.name);
+      const volumeFactors: Record<Exclude<VolumeUnit, 'g'>, number> = { ml: 1, dl: 100, tbsp: 15, tsp: 5 };
+      const amountInMl = amountUnit === 'g' ? amount / density : amount * volumeFactors[amountUnit];
+      const totalWeight = amountUnit === 'g' ? amount : amountInMl * density;
+      const nutritionBasisAmount = foodData.unit === 'ml'
+        ? amountInMl
+        : totalWeight;
+      const multiplier = nutritionBasisAmount / 100;
 
       if (isRecipeMode) {
         // In recipe mode, pass ingredient back to recipe builder
@@ -681,17 +735,7 @@ export default function ScanScreen() {
       Haptics.selectionAsync();
     }
     
-    // Convert to grams for storage using kitchen-friendly factors
-    const unitToGramFactor: Record<VolumeUnit, number> = {
-      g: 1,
-      ml: 1,
-      dl: 100,
-      tbsp: 15,
-      tsp: 5,
-    };
-    const amountInGrams = amount * (unitToGramFactor[unitType] ?? 1);
-    
-    saveFood(amountInGrams);
+    saveFood(amount, unitType);
   };
 
   const handleCancel = () => {
@@ -735,11 +779,23 @@ export default function ScanScreen() {
             </Text>
             {loading && <Text style={[styles.loadingText, { fontSize: 14 }]}>Finding nutrition info...</Text>}
             {!webScannerActive && !loading && (
-              <Pressable
-                style={[styles.footerButton, styles.footerPrimaryButton, { marginTop: 8, marginBottom: 4 }]}
-                onPress={() => startBarcodeScanning()}>
-                <Text style={styles.footerButtonText}>▶ Start Camera</Text>
-              </Pressable>
+              <>
+                {webCameraError && (
+                  <Text style={[styles.loadingText, { textAlign: 'center', marginBottom: 12 }]}>
+                    {webCameraError}
+                  </Text>
+                )}
+                <Pressable
+                  style={[styles.footerButton, styles.footerPrimaryButton, { marginTop: 8, marginBottom: 10 }]}
+                  onPress={startBarcodeScanning}>
+                  <Text style={styles.footerButtonText}>▶ Start Camera</Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.footerButton, { marginBottom: 4 }]}
+                  onPress={() => setShowManualEntry(true)}>
+                  <Text style={styles.footerButtonText}>✏️ Add Food Manually</Text>
+                </Pressable>
+              </>
             )}
             
             
@@ -755,6 +811,14 @@ export default function ScanScreen() {
               barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e'],
             }}
             onBarcodeScanned={!scanned ? handleBarCodeScanned : undefined}
+            onCameraReady={() => {
+              setNativeCameraState('ready');
+              setNativeCameraError(null);
+            }}
+            onMountError={(event) => {
+              setNativeCameraState('error');
+              setNativeCameraError(event.message || 'The camera could not be started on this device.');
+            }}
           />
           <View style={styles.overlayContainer}>
             {/* Top dark overlay */}
@@ -825,11 +889,11 @@ export default function ScanScreen() {
                 <Text style={styles.closeButtonText}>✕</Text>
               </Pressable>
               <View style={styles.headerContent}>
-                <Text style={styles.modalTitle}>🎉 Product Found</Text>
+                <Text style={styles.modalTitle}>Product Found</Text>
                 <Text style={styles.productName}>{foodData?.name}</Text>
                 {foodData && foodData.nutrients.protein > 15 && (
                   <View style={styles.achievementBadge}>
-                    <Text style={styles.achievementBadgeText}>💪 High Protein</Text>
+                    <Text style={styles.achievementBadgeText}>High Protein</Text>
                   </View>
                 )}
               </View>
@@ -865,7 +929,7 @@ export default function ScanScreen() {
                   {imageLoaded && (
                     <>
                       <View style={styles.imagePinIcon}>
-                        <Text style={styles.imagePinText}>📌</Text>
+                        <Text style={styles.imagePinText}>Details</Text>
                       </View>
                       <Text style={styles.tapToEnlarge}>Tap to enlarge</Text>
                     </>
@@ -875,7 +939,34 @@ export default function ScanScreen() {
             )}
             
             <View style={styles.nutritionBox}>
-              <Text style={styles.nutritionTitle}>📊 Nutrition per 100{foodData?.unit === 'ml' ? 'ml' : 'g'}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <Text style={[styles.macroLabel, { color: '#64748b' }]}>LABEL BASIS</Text>
+                <View style={{ flexDirection: 'row', gap: 6 }}>
+                  {(['g', 'ml'] as const).map((basis) => (
+                    <Pressable
+                      key={basis}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: foodData?.unit === basis }}
+                      onPress={() => {
+                        if (!foodData) return;
+                        const nextServing = convertServingSize(servingSize, unitType, basis);
+                        const nextAmount = convertServingSize(customAmount, unitType, basis);
+                        setFoodData({ ...foodData, unit: basis, nutritionUnitVerified: true });
+                        setServingSize(nextServing);
+                        setCustomAmount(nextAmount);
+                        setUnitType(basis);
+                      }}
+                      style={[
+                        styles.unitButton,
+                        foodData?.unit === basis && styles.unitButtonActive,
+                        { paddingVertical: 5, paddingHorizontal: 9 },
+                      ]}>
+                      <Text style={[styles.unitButtonText, foodData?.unit === basis && styles.unitButtonTextActive]}>100 {basis}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
+              <Text style={styles.nutritionTitle}>Nutrition per 100{foodData?.unit === 'ml' ? 'ml' : 'g'}</Text>
               <Text style={styles.nutritionCalories}>
                 {Math.round(foodData?.nutrients.calories || 0)} kcal
               </Text>
@@ -896,7 +987,20 @@ export default function ScanScreen() {
                   <Text style={styles.macroLabel}>FIBER</Text>
                   <Text style={styles.macroValue}>{(parseFloat(foodData?.nutrients.fiber?.toFixed(1) || '0'))}g</Text>
                 </View>
+                {foodData?.nutritionUnitVerified === false && (
+                  <Text style={{ marginTop: 8, color: '#92400e', fontSize: 12 }}>
+                    The source did not specify whether this label is per 100 g or 100 ml. Check the package and select the correct basis.
+                  </Text>
+                )}
               </View>
+              {(foodData?.missingNutritionFields?.length ?? 0) > 0 && (
+                <View style={{ marginTop: 12, padding: 12, borderRadius: 10, backgroundColor: '#fff7ed', borderWidth: 1, borderColor: '#fdba74' }}>
+                  <Text style={{ color: '#9a3412', fontSize: 13, fontWeight: '700' }}>Incomplete product data</Text>
+                  <Text style={{ marginTop: 3, color: '#9a3412', fontSize: 12 }}>
+                    Missing: {foodData?.missingNutritionFields?.join(', ')}. Review the package label before adding this food.
+                  </Text>
+                </View>
+              )}
             </View>
 
             <View style={styles.mealContainer}>
@@ -923,7 +1027,7 @@ export default function ScanScreen() {
 
             {isRecipeMode ? (
               <View style={styles.amountSection}>
-                <Text style={styles.quantityLabel}>🔢 Total Amount Added</Text>
+                <Text style={styles.quantityLabel}>Total Amount Added</Text>
                 <View style={styles.unitSelector}>
                   {['g', 'ml', 'dl', 'tbsp', 'tsp'].map((unit) => (
                     <Pressable
@@ -1002,7 +1106,7 @@ export default function ScanScreen() {
                 <View style={styles.dividerLine} />
 
                 <View style={styles.amountSection}>
-                  <Text style={styles.quantityLabel}>🔢 Total Amount Consumed</Text>
+                  <Text style={styles.quantityLabel}>Total Amount Consumed</Text>
                   <View style={styles.quantityInputRow}>
                     <TextInput
                       style={styles.quantityInput}

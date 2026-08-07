@@ -28,7 +28,7 @@ const mealOrder: Array<'Breakfast' | 'Lunch' | 'Dinner' | 'Snack' | 'Other'> = [
 ];
 
 export default function HomeScreen() {
-  const { isDark, toggleTheme } = useAppTheme();
+  const { isDark } = useAppTheme();
   const foodManager = useFoodManager();
   const { recipes, addRecipe, deleteRecipe, updateRecipe, loadRecipes } = useRecipes();
   const [goals, setGoals] = usePersistedState(STORAGE_KEYS.MACRO_GOALS, { calories: 2000, protein: 150, carbs: 200, fat: 65, fiber: 30 });
@@ -276,9 +276,6 @@ export default function HomeScreen() {
       <ScrollView style={[styles.container, isDark && styles.containerDark]}>
       <ThemedView style={[styles.header, isDark && styles.headerDark, { paddingTop: Math.max(insets.top, 16) }]}>
         <ThemedText type="title" style={[styles.headerTitle, isDark && styles.headerTitleDark]}>Today's Nutrition</ThemedText>
-        <Pressable style={styles.themeToggle} onPress={toggleTheme}>
-          <Text style={styles.themeToggleIcon}>{isDark ? '🌙' : '☀️'}</Text>
-        </Pressable>
       </ThemedView>
 
       <ThemedView style={[styles.totalsCard, isDark && styles.totalsCardDark]}>
@@ -333,7 +330,7 @@ export default function HomeScreen() {
       {/* Favorites Section */}
       {foodManager.favorites.length > 0 && (
         <ThemedView style={[styles.favoritesSection, isDark && styles.favoritesSectionDark]}>
-          <Text style={[styles.favoritesTitle, isDark && styles.favoritesTitleDark]}>⭐ Quick Add</Text>
+          <Text style={[styles.favoritesTitle, isDark && styles.favoritesTitleDark]}>Quick Add</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.favoritesScroll}>
             {foodManager.favorites.map((fav) => (
               <Pressable

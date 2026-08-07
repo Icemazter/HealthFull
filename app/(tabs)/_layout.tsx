@@ -6,12 +6,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { HapticTab } from '@/components/haptic-tab';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
 
 export default function TabLayout() {
-  const systemColorScheme = useColorScheme();
-  const colorScheme = systemColorScheme ?? 'light';
-  const isDark = colorScheme === 'dark';
+  const colorScheme = 'dark';
+  const isDark = true;
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const isLargeDevice = width > 768;
@@ -60,9 +58,9 @@ export default function TabLayout() {
         <Tabs.Screen
           name="explore"
           options={{
-            title: 'Exercise',
-            tabBarLabel: isLargeDevice ? 'Exercise' : '',
-            tabBarIcon: ({ color }) => <IconSymbol size={30} name="figure.run" color={color} />,
+            title: 'Measurements',
+            tabBarLabel: isLargeDevice ? 'Measurements' : '',
+            tabBarIcon: ({ color }) => <IconSymbol size={30} name="ruler" color={color} />,
           }}
         />
         <Tabs.Screen

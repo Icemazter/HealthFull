@@ -19,7 +19,7 @@ const MAPPING = {
   'chevron.left.forwardslash.chevron.right': 'code',
   'chevron.right': 'chevron-right',
   'fork.knife': 'restaurant',
-  'figure.run': 'directions-run',
+  'ruler': 'straighten',
   'target': 'gps-fixed',
   'chart.line.uptrend.xyaxis': 'show-chart',
 } as IconMapping;
