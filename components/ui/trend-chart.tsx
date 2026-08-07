@@ -1,3 +1,5 @@
+import { linearRegression } from '@/utils/health-analytics';
+import React, { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 interface TrendChartPoint {
@@ -37,13 +39,38 @@ export function TrendChart({ points, color, unit, isDark, height, selectedTimest
     return orderedPoints[pointIndex];
   });
   const chartHeight = height ?? Math.min(220, 155 + Math.ceil(orderedPoints.length / 45) * 12);
+  const regression = linearRegression(orderedPoints.map((point) => ({ timestamp: point.timestamp, value: point.trend ?? point.value })));
+  const [plotSize, setPlotSize] = useState({ width: 0, height: 0 });
 
   return (
     <View style={[styles.chart, { height: chartHeight }, isDark && styles.chartDark]}>
       <Text style={[styles.axisLabel, styles.maxLabel, isDark && styles.axisLabelDark]}>{max.toFixed(1)}{unit}</Text>
       <Text style={[styles.axisLabel, styles.middleLabel, isDark && styles.axisLabelDark]}>{((max + min) / 2).toFixed(1)}{unit}</Text>
       <Text style={[styles.axisLabel, styles.minLabel, isDark && styles.axisLabelDark]}>{min.toFixed(1)}{unit}</Text>
-      <View style={styles.plot}>
+      <View
+        style={styles.plot}
+        onLayout={({ nativeEvent }) => {
+          const { width, height: plotHeight } = nativeEvent.layout;
+          if (width !== plotSize.width || plotHeight !== plotSize.height) {
+            setPlotSize({ width, height: plotHeight });
+          }
+        }}>
+        {plotSize.width > 0 && orderedPoints.slice(0, -1).map((point, index) => {
+          const nextPoint = orderedPoints[index + 1];
+          const x1 = ((index + 0.5) / orderedPoints.length) * plotSize.width;
+          const x2 = ((index + 1.5) / orderedPoints.length) * plotSize.width;
+          const y1 = plotSize.height - ((point.trend ?? point.value) - min) / range * plotSize.height;
+          const y2 = plotSize.height - ((nextPoint.trend ?? nextPoint.value) - min) / range * plotSize.height;
+          const length = Math.hypot(x2 - x1, y2 - y1);
+          const angle = Math.atan2(y2 - y1, x2 - x1) * 180 / Math.PI;
+          return (
+            <View
+              key={`${point.timestamp}-${nextPoint.timestamp}`}
+              pointerEvents="none"
+              style={[styles.trendLine, { backgroundColor: color, left: x1, top: y1, width: length, transform: [{ rotate: `${angle}deg` }] }]}
+            />
+          );
+        })}
         {orderedPoints.map((point, index) => {
           const rawBottom = ((point.value - min) / range) * 100;
           const trendBottom = (((point.trend ?? point.value) - min) / range) * 100;
@@ -62,6 +89,13 @@ export function TrendChart({ points, color, unit, isDark, height, selectedTimest
           );
         })}
       </View>
+      {regression && (
+        <View style={[styles.equationBadge, isDark && styles.equationBadgeDark]}>
+          <Text style={[styles.equationText, isDark && styles.equationTextDark]}>
+            y = {regression.slope.toFixed(3)}x {regression.intercept >= 0 ? '+' : '-'} {Math.abs(regression.intercept).toFixed(1)}
+          </Text>
+        </View>
+      )}
       <View style={styles.xAxisLabels}>
         {xAxisPoints.map((point, index) => (
           <Text key={`${point.timestamp}-${index}`} style={[styles.xAxisLabel, isDark && styles.axisLabelDark]}>
@@ -90,6 +124,7 @@ const styles = StyleSheet.create({
   selectionGuide: { position: 'absolute', top: 0, bottom: 0, left: '50%', width: 1, opacity: 0.5 },
   rawPoint: { position: 'absolute', left: '50%', width: 8, height: 8, borderRadius: 4, backgroundColor: '#fff', borderWidth: 2, marginLeft: -4 },
   trendPoint: { position: 'absolute', left: '50%', width: 5, height: 5, borderRadius: 3, marginLeft: -2.5 },
+  trendLine: { position: 'absolute', height: 2, borderRadius: 1, opacity: 0.7, transformOrigin: 'left center' },
   axisLabel: { position: 'absolute', left: 5, color: '#64748b', fontSize: 11 },
   axisLabelDark: { color: '#a3a3a3' },
   maxLabel: { top: 8 },
@@ -97,7 +132,11 @@ const styles = StyleSheet.create({
   minLabel: { bottom: 26 },
   xAxisLabels: { position: 'absolute', left: 48, right: 10, bottom: 8, flexDirection: 'row', justifyContent: 'space-between' },
   xAxisLabel: { color: '#64748b', fontSize: 10 },
-  tooltip: { position: 'absolute', top: 8, right: 8, paddingVertical: 5, paddingHorizontal: 8, borderRadius: 6, backgroundColor: '#e2e8f0' },
+  equationBadge: { position: 'absolute', top: 8, right: 8, paddingVertical: 4, paddingHorizontal: 7, borderRadius: 6, backgroundColor: '#e2e8f0' },
+  equationBadgeDark: { backgroundColor: '#3f3f46' },
+  equationText: { color: '#334155', fontSize: 10, fontWeight: '700' },
+  equationTextDark: { color: '#f4f4f5' },
+  tooltip: { position: 'absolute', top: 34, right: 8, paddingVertical: 5, paddingHorizontal: 8, borderRadius: 6, backgroundColor: '#e2e8f0' },
   tooltipDark: { backgroundColor: '#3f3f46' },
   tooltipText: { color: '#334155', fontSize: 11, fontWeight: '600' },
   tooltipTextDark: { color: '#f4f4f5' },
