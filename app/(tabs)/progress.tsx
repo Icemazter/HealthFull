@@ -26,6 +26,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '@/hooks/use-theme';
 
 type RangeDays = 30 | 90 | 365;
+type AnalyticsDisplayMode = 'chart' | 'values';
 
 interface BodyStats {
   heightCm?: string;
@@ -52,6 +53,65 @@ const filterRange = <T extends { timestamp: number }>(entries: T[], range: Range
   return entries.filter((entry) => entry.timestamp >= threshold);
 };
 
+interface DisplayPoint {
+  timestamp: number;
+  value: number;
+  trend?: number;
+}
+
+function AnalyticsToggle({ mode, onChange, isDark, chartLabel = 'Chart' }: {
+  mode: AnalyticsDisplayMode;
+  onChange: (mode: AnalyticsDisplayMode) => void;
+  isDark: boolean;
+  chartLabel?: string;
+}) {
+  return (
+    <View style={[styles.analyticsToggle, isDark && styles.analyticsToggleDark]}>
+      {([['chart', chartLabel], ['values', 'Values']] as const).map(([value, label]) => (
+        <Pressable
+          key={value}
+          accessibilityRole="button"
+          accessibilityState={{ selected: mode === value }}
+          onPress={() => onChange(value)}
+          style={[styles.analyticsToggleButton, mode === value && styles.analyticsToggleButtonActive]}>
+          <Text style={[styles.analyticsToggleText, isDark && styles.analyticsToggleTextDark, mode === value && styles.analyticsToggleTextActive]}>{label}</Text>
+        </Pressable>
+      ))}
+    </View>
+  );
+}
+
+function ValueTable({ points, unit, isDark, selectedTimestamp, onSelect, showTrend = false }: {
+  points: DisplayPoint[];
+  unit: string;
+  isDark: boolean;
+  selectedTimestamp: number | null;
+  onSelect: (point: DisplayPoint) => void;
+  showTrend?: boolean;
+}) {
+  return (
+    <View style={[styles.valueTable, isDark && styles.valueTableDark]}>
+      <View style={styles.valueTableHeader}>
+        <Text style={[styles.valueTableHeaderText, isDark && styles.mutedDark]}>Date</Text>
+        <Text style={[styles.valueTableHeaderText, isDark && styles.mutedDark]}>Value</Text>
+        {showTrend && <Text style={[styles.valueTableHeaderText, isDark && styles.mutedDark]}>7-day avg</Text>}
+      </View>
+      {points.slice(-20).reverse().map((point) => (
+        <Pressable
+          key={point.timestamp}
+          accessibilityRole="button"
+          accessibilityState={{ selected: selectedTimestamp === point.timestamp }}
+          onPress={() => onSelect(point)}
+          style={[styles.valueTableRow, selectedTimestamp === point.timestamp && styles.valueTableRowSelected]}>
+          <Text style={[styles.valueTableText, isDark && styles.textDark]}>{new Date(point.timestamp).toLocaleDateString()}</Text>
+          <Text style={[styles.valueTableText, isDark && styles.textDark]}>{point.value.toFixed(1)} {unit}</Text>
+          {showTrend && <Text style={[styles.valueTableText, isDark && styles.textDark]}>{point.trend?.toFixed(1) ?? '—'} {unit}</Text>}
+        </Pressable>
+      ))}
+    </View>
+  );
+}
+
 export default function ProgressScreen() {
   const insets = useSafeAreaInsets();
   const { isDark, toggleTheme, colorScheme } = useAppTheme();
@@ -59,6 +119,10 @@ export default function ProgressScreen() {
   const [measurementType, setMeasurementType] = useState('Waist');
   const [data, setData] = useState<ProgressData>(defaultData);
   const [selectedWeightTimestamp, setSelectedWeightTimestamp] = useState<number | null>(null);
+  const [selectedMeasurementTimestamp, setSelectedMeasurementTimestamp] = useState<number | null>(null);
+  const [weightDisplayMode, setWeightDisplayMode] = useState<AnalyticsDisplayMode>('chart');
+  const [measurementDisplayMode, setMeasurementDisplayMode] = useState<AnalyticsDisplayMode>('chart');
+  const [macroDisplayMode, setMacroDisplayMode] = useState<AnalyticsDisplayMode>('chart');
   const [progressGoal, setProgressGoal] = usePersistedState<ProgressGoal>(STORAGE_KEYS.PROGRESS_GOAL, { targetWeight: '', targetDate: '' });
 
   const loadProgress = useCallback(async () => {
@@ -111,6 +175,7 @@ export default function ProgressScreen() {
   const measurementChange = useMemo(() => calculateMeasurementChange(selectedMeasurements, measurementType), [selectedMeasurements, measurementType]);
   const contextSummary = useMemo(() => summarizeDailyContext(filterRange(data.contexts, range)), [data.contexts, range]);
   const selectedWeight = weightTrend.find((point) => point.timestamp === selectedWeightTimestamp);
+  const selectedMeasurement = selectedMeasurements.find((point) => point.timestamp === selectedMeasurementTimestamp);
 
   const statCards = [
     { value: macro.loggedDays, label: 'Days Logged' },
@@ -146,17 +211,31 @@ export default function ProgressScreen() {
       </View>
 
       <View style={[styles.card, isDark && styles.cardDark]}>
-        <Text style={[styles.cardTitle, isDark && styles.textDark]}>Weight trend</Text>
+        <View style={styles.cardHeader}>
+          <Text style={[styles.cardTitle, isDark && styles.textDark]}>Weight trend</Text>
+          <AnalyticsToggle mode={weightDisplayMode} onChange={setWeightDisplayMode} isDark={isDark} />
+        </View>
         <Text style={[styles.description, isDark && styles.mutedDark]}>Open circles are weigh-ins; solid points show your 7-day rolling average.</Text>
-        <TrendChart
-          points={weightTrend}
-          color="#2563eb"
-          unit=" kg"
-          isDark={isDark}
-          selectedTimestamp={selectedWeightTimestamp}
-          onPointPress={(point) => setSelectedWeightTimestamp(point.timestamp)}
-        />
-        {selectedWeight && (
+        {weightDisplayMode === 'chart' ? (
+          <TrendChart
+            points={weightTrend}
+            color="#2563eb"
+            unit=" kg"
+            isDark={isDark}
+            selectedTimestamp={selectedWeightTimestamp}
+            onPointSelect={(point) => setSelectedWeightTimestamp(point.timestamp)}
+          />
+        ) : (
+          <ValueTable
+            points={weightTrend}
+            unit="kg"
+            isDark={isDark}
+            selectedTimestamp={selectedWeightTimestamp}
+            onSelect={(point) => setSelectedWeightTimestamp(point.timestamp)}
+            showTrend
+          />
+        )}
+        {selectedWeight && weightDisplayMode === 'chart' && (
           <Text style={[styles.pointDetail, isDark && styles.mutedDark]}>
             {new Date(selectedWeight.timestamp).toLocaleDateString()}: {selectedWeight.value.toFixed(1)} kg, 7-day average {selectedWeight.trend.toFixed(1)} kg.
           </Text>
@@ -215,18 +294,30 @@ export default function ProgressScreen() {
       </View>
 
       <View style={[styles.card, isDark && styles.cardDark]}>
-        <Text style={[styles.cardTitle, isDark && styles.textDark]}>Macro adherence</Text>
+        <View style={styles.cardHeader}>
+          <Text style={[styles.cardTitle, isDark && styles.textDark]}>Macro adherence</Text>
+          <AnalyticsToggle mode={macroDisplayMode} onChange={setMacroDisplayMode} isDark={isDark} chartLabel="Bars" />
+        </View>
         <Text style={[styles.description, isDark && styles.mutedDark]}>Average intake across days with food logged in the selected range.</Text>
-        {(['calories', 'protein', 'carbs', 'fat', 'fiber'] as const).map((key) => (
-          <View key={key} style={styles.macroRow}>
-            <Text style={[styles.macroName, isDark && styles.textDark]}>{key[0].toUpperCase() + key.slice(1)}</Text>
-            <View style={[styles.macroTrack, isDark && styles.macroTrackDark]}>
-              <View style={[styles.macroFill, { width: `${macro.adherence[key]}%` }]} />
+        {macroDisplayMode === 'chart' ? (
+          (['calories', 'protein', 'carbs', 'fat', 'fiber'] as const).map((key) => (
+            <View key={key} style={styles.macroRow}>
+              <Text style={[styles.macroName, isDark && styles.textDark]}>{key[0].toUpperCase() + key.slice(1)}</Text>
+              <View style={[styles.macroTrack, isDark && styles.macroTrackDark]}>
+                <View style={[styles.macroFill, { width: `${macro.adherence[key]}%` }]} />
+              </View>
+              <Text style={[styles.macroPercent, isDark && styles.mutedDark]}>{macro.adherence[key]}%</Text>
             </View>
-
-            <Text style={[styles.macroPercent, isDark && styles.mutedDark]}>{macro.adherence[key]}%</Text>
-          </View>
-        ))}
+          ))
+        ) : (
+          (['calories', 'protein', 'carbs', 'fat', 'fiber'] as const).map((key) => (
+            <View key={key} style={styles.valueRow}>
+              <Text style={[styles.macroName, isDark && styles.textDark]}>{key[0].toUpperCase() + key.slice(1)}</Text>
+              <Text style={[styles.valueRowText, isDark && styles.textDark]}>{Math.round(macro.average[key])} / {Number(data.goals[key]) || 0} {key === 'calories' ? 'kcal' : 'g'}</Text>
+              <Text style={[styles.macroPercent, isDark && styles.mutedDark]}>{macro.adherence[key]}%</Text>
+            </View>
+          ))
+        )}
       </View>
 
       <View style={[styles.card, isDark && styles.cardDark]}>
@@ -277,7 +368,10 @@ export default function ProgressScreen() {
       </View>
 
       <View style={[styles.card, isDark && styles.cardDark]}>
-        <Text style={[styles.cardTitle, isDark && styles.textDark]}>Measurements</Text>
+        <View style={styles.cardHeader}>
+          <Text style={[styles.cardTitle, isDark && styles.textDark]}>Measurements</Text>
+          <AnalyticsToggle mode={measurementDisplayMode} onChange={setMeasurementDisplayMode} isDark={isDark} />
+        </View>
         {types.length > 0 ? (
           <>
             <View style={styles.measurementTypes}>
@@ -287,7 +381,29 @@ export default function ProgressScreen() {
                 </Pressable>
               ))}
             </View>
-            <TrendChart points={selectedMeasurements} color="#16a34a" unit=" cm" isDark={isDark} />
+            {measurementDisplayMode === 'chart' ? (
+              <TrendChart
+                points={selectedMeasurements}
+                color="#16a34a"
+                unit=" cm"
+                isDark={isDark}
+                selectedTimestamp={selectedMeasurementTimestamp}
+                onPointSelect={(point) => setSelectedMeasurementTimestamp(point.timestamp)}
+              />
+            ) : (
+              <ValueTable
+                points={selectedMeasurements}
+                unit="cm"
+                isDark={isDark}
+                selectedTimestamp={selectedMeasurementTimestamp}
+                onSelect={(point) => setSelectedMeasurementTimestamp(point.timestamp)}
+              />
+            )}
+            {selectedMeasurement && measurementDisplayMode === 'chart' && (
+              <Text style={[styles.pointDetail, isDark && styles.mutedDark]}>
+                {new Date(selectedMeasurement.timestamp).toLocaleDateString()}: {selectedMeasurement.value.toFixed(1)} cm.
+              </Text>
+            )}
             {measurementChange && (
               <Text style={[styles.helpText, isDark && styles.mutedDark]}>
                 {measurementType} changed {measurementChange.change >= 0 ? '+' : ''}{measurementChange.change.toFixed(1)} cm over {measurementChange.daysBetween} days.
@@ -370,6 +486,23 @@ const styles = StyleSheet.create({
   measurementChip: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 16, backgroundColor: '#e2e8f0' },
   guidanceValue: { fontSize: 18, fontWeight: '700', color: '#111827', marginTop: 4 },
   pointDetail: { marginTop: 12, color: '#64748b', fontSize: 13 },
+  cardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  analyticsToggle: { flexDirection: 'row', padding: 2, borderRadius: 8, backgroundColor: '#e2e8f0' },
+  analyticsToggleDark: { backgroundColor: '#262626' },
+  analyticsToggleButton: { paddingVertical: 5, paddingHorizontal: 8, borderRadius: 6 },
+  analyticsToggleButtonActive: { backgroundColor: Palette.primary },
+  analyticsToggleText: { color: '#475569', fontSize: 11, fontWeight: '700' },
+  analyticsToggleTextDark: { color: '#cbd5e1' },
+  analyticsToggleTextActive: { color: '#fff' },
+  valueRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#e2e8f0' },
+  valueRowText: { flex: 1, color: '#334155', fontSize: 13, textAlign: 'right' },
+  valueTable: { marginTop: 14, overflow: 'hidden', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 10 },
+  valueTableDark: { borderColor: '#3f3f46' },
+  valueTableHeader: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 12, paddingVertical: 8, backgroundColor: '#f8fafc' },
+  valueTableHeaderText: { flex: 1, color: '#64748b', fontSize: 11, fontWeight: '700' },
+  valueTableRow: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 12, paddingVertical: 10, borderTopWidth: 1, borderTopColor: '#e2e8f0' },
+  valueTableRowSelected: { backgroundColor: '#dbeafe' },
+  valueTableText: { flex: 1, color: '#334155', fontSize: 12 },
   comparisonGrid: { flexDirection: 'row', gap: 8 },
   comparisonItem: { flex: 1, padding: 12, borderRadius: 10, backgroundColor: '#e2e8f0' },
   comparisonItemDark: { backgroundColor: '#1e293b' },
