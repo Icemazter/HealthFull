@@ -22,7 +22,8 @@ interface FoodData {
   nutrients: NutrientData;
   imageUrl?: string;
   servingSize?: number; // in grams or ml depending on unit
-  unit?: 'g' | 'ml'; // Whether nutrition is per 100g or 100ml
+  unit?: 'g' | 'ml'; // Nutrition label basis: per 100g or per 100ml
+  nutritionUnitVerified?: boolean;
   barcode?: string;
   missingNutritionFields?: string[];
 }
@@ -540,7 +541,7 @@ export default function ScanScreen() {
       
       let response;
       try {
-        response = await fetch(`https://world.openfoodfacts.org/api/v2/product/${data}.json?fields=product_name,product_name_sv,product_name_en,nutriments,image_front_url,image_url,serving_quantity,categories_tags`, {
+        response = await fetch(`https://world.openfoodfacts.org/api/v2/product/${data}.json?fields=product_name,product_name_sv,product_name_en,nutriments,image_front_url,image_url,serving_quantity,nutrition_data_per`, {
           signal: controller.signal,
         });
       } catch (fetchError) {
@@ -582,19 +583,8 @@ export default function ScanScreen() {
         const product = json.product;
         const nutrients = product.nutriments || {};
         
-        // Detect if product is liquid (milk, juice, etc.)
-        const categories = (product.categories_tags || []).join('|').toLowerCase();
-        const isLiquid = categories.includes('milk') || 
-                        categories.includes('juice') || 
-                        categories.includes('beverage') ||
-                        categories.includes('drink') ||
-                        categories.includes('yogurt') ||
-                        categories.includes('liquid') ||
-                        product.product_name?.toLowerCase().includes('milk') ||
-                        product.product_name?.toLowerCase().includes('juice') ||
-                        product.product_name?.toLowerCase().includes('drink');
-        
-        const productUnit = isLiquid ? 'ml' : 'g';
+        const nutritionBasis = product.nutrition_data_per;
+        const productUnit: 'g' | 'ml' = nutritionBasis === '100ml' ? 'ml' : 'g';
 
         const energyKcal = Number(nutrients['energy-kcal_100g'] ?? nutrients['energy-kcal']);
         const energyKj = Number(nutrients.energy_100g ?? nutrients.energy);
@@ -618,7 +608,8 @@ export default function ScanScreen() {
           },
           imageUrl: product.image_front_url || product.image_url,
           servingSize: product.serving_quantity || 100, // Use API serving size or default to 100
-          unit: productUnit, // Track if nutrition is per 100g or 100ml
+          unit: productUnit,
+          nutritionUnitVerified: nutritionBasis === '100g' || nutritionBasis === '100ml',
           barcode: data,
           missingNutritionFields,
         };
@@ -655,12 +646,18 @@ export default function ScanScreen() {
     }
   };
 
-  const saveFood = async (totalGrams: number = 0) => {
+  const saveFood = async (amount: number, amountUnit: VolumeUnit) => {
     if (!foodData) return;
 
     try {
-      const totalWeight = totalGrams > 0 ? totalGrams : parseFloat(customAmount) || 100;
-      const multiplier = totalWeight / 100; // Convert grams to 100g units
+      const density = estimateDensity(foodData.name);
+      const volumeFactors: Record<Exclude<VolumeUnit, 'g'>, number> = { ml: 1, dl: 100, tbsp: 15, tsp: 5 };
+      const amountInMl = amountUnit === 'g' ? amount / density : amount * volumeFactors[amountUnit];
+      const totalWeight = amountUnit === 'g' ? amount : amountInMl * density;
+      const nutritionBasisAmount = foodData.unit === 'ml'
+        ? amountInMl
+        : totalWeight;
+      const multiplier = nutritionBasisAmount / 100;
 
       if (isRecipeMode) {
         // In recipe mode, pass ingredient back to recipe builder
@@ -738,17 +735,7 @@ export default function ScanScreen() {
       Haptics.selectionAsync();
     }
     
-    // Convert to grams for storage using kitchen-friendly factors
-    const unitToGramFactor: Record<VolumeUnit, number> = {
-      g: 1,
-      ml: 1,
-      dl: 100,
-      tbsp: 15,
-      tsp: 5,
-    };
-    const amountInGrams = amount * (unitToGramFactor[unitType] ?? 1);
-    
-    saveFood(amountInGrams);
+    saveFood(amount, unitType);
   };
 
   const handleCancel = () => {
@@ -952,6 +939,33 @@ export default function ScanScreen() {
             )}
             
             <View style={styles.nutritionBox}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <Text style={[styles.macroLabel, { color: '#64748b' }]}>LABEL BASIS</Text>
+                <View style={{ flexDirection: 'row', gap: 6 }}>
+                  {(['g', 'ml'] as const).map((basis) => (
+                    <Pressable
+                      key={basis}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: foodData?.unit === basis }}
+                      onPress={() => {
+                        if (!foodData) return;
+                        const nextServing = convertServingSize(servingSize, unitType, basis);
+                        const nextAmount = convertServingSize(customAmount, unitType, basis);
+                        setFoodData({ ...foodData, unit: basis, nutritionUnitVerified: true });
+                        setServingSize(nextServing);
+                        setCustomAmount(nextAmount);
+                        setUnitType(basis);
+                      }}
+                      style={[
+                        styles.unitButton,
+                        foodData?.unit === basis && styles.unitButtonActive,
+                        { paddingVertical: 5, paddingHorizontal: 9 },
+                      ]}>
+                      <Text style={[styles.unitButtonText, foodData?.unit === basis && styles.unitButtonTextActive]}>100 {basis}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
               <Text style={styles.nutritionTitle}>Nutrition per 100{foodData?.unit === 'ml' ? 'ml' : 'g'}</Text>
               <Text style={styles.nutritionCalories}>
                 {Math.round(foodData?.nutrients.calories || 0)} kcal
@@ -973,6 +987,11 @@ export default function ScanScreen() {
                   <Text style={styles.macroLabel}>FIBER</Text>
                   <Text style={styles.macroValue}>{(parseFloat(foodData?.nutrients.fiber?.toFixed(1) || '0'))}g</Text>
                 </View>
+                {foodData?.nutritionUnitVerified === false && (
+                  <Text style={{ marginTop: 8, color: '#92400e', fontSize: 12 }}>
+                    The source did not specify whether this label is per 100 g or 100 ml. Check the package and select the correct basis.
+                  </Text>
+                )}
               </View>
               {(foodData?.missingNutritionFields?.length ?? 0) > 0 && (
                 <View style={{ marginTop: 12, padding: 12, borderRadius: 10, backgroundColor: '#fff7ed', borderWidth: 1, borderColor: '#fdba74' }}>
