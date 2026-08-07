@@ -206,7 +206,7 @@ export default function ProgressScreen() {
   const activeData = isUsingDemoData ? demoAnalytics.data : data;
   const activeGoal = isUsingDemoData ? demoAnalytics.goal : progressGoal;
   const rangedWeights = useMemo(() => filterRange(activeData.weights, range), [activeData.weights, range]);
-  const weightTrend = useMemo(() => buildWeightTrend(rangedWeights).slice(-20), [rangedWeights]);
+  const weightTrend = useMemo(() => buildWeightTrend(rangedWeights), [rangedWeights]);
   const projection = useMemo(() => forecastWeight(rangedWeights), [rangedWeights]);
   const macro = useMemo(() => calculateMacroAdherence(filterRange(activeData.foods, range), activeData.goals as any), [activeData.foods, activeData.goals, range]);
   const adaptiveGuidance = useMemo(() => estimateAdaptiveGuidance(activeData.foods, activeData.weights, activeData.goals as any), [activeData.foods, activeData.goals, activeData.weights]);

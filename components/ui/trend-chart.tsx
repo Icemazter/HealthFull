@@ -16,23 +16,35 @@ interface TrendChartProps {
   onPointSelect?: (point: TrendChartPoint) => void;
 }
 
-export function TrendChart({ points, color, unit, isDark, height = 150, selectedTimestamp, onPointSelect }: TrendChartProps) {
+export function TrendChart({ points, color, unit, isDark, height, selectedTimestamp, onPointSelect }: TrendChartProps) {
   if (points.length < 2) {
     return <Text style={[styles.empty, isDark && styles.emptyDark]}>Add at least two entries to begin a trend.</Text>;
   }
 
-  const values = points.flatMap((point) => [point.value, point.trend ?? point.value]);
-  const min = Math.min(...values);
-  const max = Math.max(...values);
+  const orderedPoints = [...points].sort((a, b) => a.timestamp - b.timestamp);
+  const values = orderedPoints.flatMap((point) => [point.value, point.trend ?? point.value]);
+  const dataMin = Math.min(...values);
+  const dataMax = Math.max(...values);
+  const dataRange = dataMax - dataMin;
+  const padding = Math.max(dataRange * 0.1, Math.abs(dataMax) * 0.005, 0.1);
+  const min = Math.floor((dataMin - padding) * 10) / 10;
+  const max = Math.ceil((dataMax + padding) * 10) / 10;
   const range = Math.max(max - min, 0.1);
-  const selectedPoint = points.find((point) => point.timestamp === selectedTimestamp);
+  const selectedPoint = orderedPoints.find((point) => point.timestamp === selectedTimestamp);
+  const labelCount = Math.min(5, orderedPoints.length);
+  const xAxisPoints = Array.from({ length: labelCount }, (_, index) => {
+    const pointIndex = Math.round(index * (orderedPoints.length - 1) / Math.max(labelCount - 1, 1));
+    return orderedPoints[pointIndex];
+  });
+  const chartHeight = height ?? Math.min(220, 155 + Math.ceil(orderedPoints.length / 45) * 12);
 
   return (
-    <View style={[styles.chart, { height }, isDark && styles.chartDark]}>
+    <View style={[styles.chart, { height: chartHeight }, isDark && styles.chartDark]}>
       <Text style={[styles.axisLabel, styles.maxLabel, isDark && styles.axisLabelDark]}>{max.toFixed(1)}{unit}</Text>
+      <Text style={[styles.axisLabel, styles.middleLabel, isDark && styles.axisLabelDark]}>{((max + min) / 2).toFixed(1)}{unit}</Text>
       <Text style={[styles.axisLabel, styles.minLabel, isDark && styles.axisLabelDark]}>{min.toFixed(1)}{unit}</Text>
       <View style={styles.plot}>
-        {points.map((point, index) => {
+        {orderedPoints.map((point, index) => {
           const rawBottom = ((point.value - min) / range) * 100;
           const trendBottom = (((point.trend ?? point.value) - min) / range) * 100;
           return (
@@ -50,6 +62,13 @@ export function TrendChart({ points, color, unit, isDark, height = 150, selected
           );
         })}
       </View>
+      <View style={styles.xAxisLabels}>
+        {xAxisPoints.map((point, index) => (
+          <Text key={`${point.timestamp}-${index}`} style={[styles.xAxisLabel, isDark && styles.axisLabelDark]}>
+            {new Date(point.timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+          </Text>
+        ))}
+      </View>
       {selectedPoint && (
         <View style={[styles.tooltip, isDark && styles.tooltipDark]}>
           <Text style={[styles.tooltipText, isDark && styles.tooltipTextDark]}>
@@ -63,10 +82,10 @@ export function TrendChart({ points, color, unit, isDark, height = 150, selected
 }
 
 const styles = StyleSheet.create({
-  chart: { position: 'relative', paddingLeft: 44, paddingVertical: 14, borderRadius: 12, backgroundColor: '#f8fafc' },
+  chart: { position: 'relative', paddingTop: 14, paddingRight: 10, paddingBottom: 30, paddingLeft: 48, borderRadius: 12, backgroundColor: '#f8fafc' },
   chartDark: { backgroundColor: '#262626' },
   plot: { flex: 1, flexDirection: 'row', alignItems: 'stretch', justifyContent: 'space-around', borderBottomWidth: 1, borderLeftWidth: 1, borderColor: '#cbd5e1' },
-  pointColumn: { flex: 1, position: 'relative', minWidth: 4 },
+  pointColumn: { flex: 1, position: 'relative' },
   selectedColumn: { backgroundColor: 'rgba(37, 99, 235, 0.12)' },
   selectionGuide: { position: 'absolute', top: 0, bottom: 0, left: '50%', width: 1, opacity: 0.5 },
   rawPoint: { position: 'absolute', left: '50%', width: 8, height: 8, borderRadius: 4, backgroundColor: '#fff', borderWidth: 2, marginLeft: -4 },
@@ -74,7 +93,10 @@ const styles = StyleSheet.create({
   axisLabel: { position: 'absolute', left: 5, color: '#64748b', fontSize: 11 },
   axisLabelDark: { color: '#a3a3a3' },
   maxLabel: { top: 8 },
-  minLabel: { bottom: 8 },
+  middleLabel: { top: '47%' },
+  minLabel: { bottom: 26 },
+  xAxisLabels: { position: 'absolute', left: 48, right: 10, bottom: 8, flexDirection: 'row', justifyContent: 'space-between' },
+  xAxisLabel: { color: '#64748b', fontSize: 10 },
   tooltip: { position: 'absolute', top: 8, right: 8, paddingVertical: 5, paddingHorizontal: 8, borderRadius: 6, backgroundColor: '#e2e8f0' },
   tooltipDark: { backgroundColor: '#3f3f46' },
   tooltipText: { color: '#334155', fontSize: 11, fontWeight: '600' },
