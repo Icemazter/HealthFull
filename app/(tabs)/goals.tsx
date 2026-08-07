@@ -51,7 +51,7 @@ export default function GoalsScreen() {
     STORAGE_KEYS.MACRO_GOALS,
     { calories: '2000', protein: '150', carbs: '200', fat: '65', fiber: '30', fatMethod: 'calories' }
   );
-  const [stats, setStats] = usePersistedState<BodyStats>(STORAGE_KEYS.BODY_STATS, {
+  const [stats] = usePersistedState<BodyStats>(STORAGE_KEYS.BODY_STATS, {
     heightCm: '175',
     weightKg: '75',
     age: '25',
@@ -60,7 +60,6 @@ export default function GoalsScreen() {
     goal: 'Maintain',
   });
   
-  const [showBodyStats, setShowBodyStats] = useState(false);
   const [diabetesMode, setDiabetesMode] = usePersistedState(STORAGE_KEYS.DIABETES_MODE, false);
   const [showDiabetes, setShowDiabetes] = useState(false);
   
@@ -217,11 +216,7 @@ export default function GoalsScreen() {
   };
 
   const saveGoals = async () => {
-    // Use batch operation to save both in one write
-    await storage.multiSet({
-      [STORAGE_KEYS.MACRO_GOALS]: goals,
-      [STORAGE_KEYS.BODY_STATS]: stats,
-    });
+    await storage.set(STORAGE_KEYS.MACRO_GOALS, goals);
     await feedback.success('Goals saved successfully!');
   };
 
@@ -244,7 +239,7 @@ export default function GoalsScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <ScrollView style={[styles.container, isDark && styles.containerDark]}>
       <View style={[styles.header, isDark && styles.headerDark, { paddingTop: Math.max(insets.top, 16) }]}>
-        <Text style={[styles.headerTitle, isDark && styles.textDark]}>Goals and Settings</Text>
+        <Text style={[styles.headerTitle, isDark && styles.textDark]}>Nutrition Goals</Text>
       </View>
 
       {/* Macro Goals */}
@@ -337,101 +332,12 @@ export default function GoalsScreen() {
         </Pressable>
       </View>
 
-      {/* Body Stats & Recommendation */}
       <View style={[styles.card, isDark && styles.cardDark]}>
-        <View style={styles.bodyHeaderRow}>
-          <Text style={[styles.cardTitle, isDark && styles.textDark]}>Body Stats</Text>
-          <Pressable style={[styles.toggleButton, isDark && styles.toggleButtonDark]} onPress={() => setShowBodyStats(!showBodyStats)}>
-            <Text style={[styles.toggleButtonText, isDark && styles.toggleButtonTextDark]}>{showBodyStats ? 'Hide' : 'Show'}</Text>
-          </Pressable>
-        </View>
-
-        {showBodyStats && (
-          <>
-            <View style={styles.inlineRow}>
-              <View style={[styles.inputGroup, styles.inlineHalf]}>
-                <Text style={[styles.label, isDark && styles.labelDark]}>Height (cm)</Text>
-                <TextInput
-                  style={[styles.input, isDark && styles.inputDark]}
-                  value={stats.heightCm}
-                  onChangeText={(text) => setStats({ ...stats, heightCm: text })}
-                  keyboardType="decimal-pad"
-                  placeholder="175"
-                  placeholderTextColor={isDark ? '#666' : '#999'}
-                />
-              </View>
-              <View style={[styles.inputGroup, styles.inlineHalf]}>
-                <Text style={[styles.label, isDark && styles.labelDark]}>Age</Text>
-                <TextInput
-                  style={[styles.input, isDark && styles.inputDark]}
-                  value={stats.age}
-                  onChangeText={(text) => setStats({ ...stats, age: text })}
-                  keyboardType="number-pad"
-                  placeholder="25"
-                  placeholderTextColor={isDark ? '#666' : '#999'}
-                />
-              </View>
-            </View>
-            <View style={[styles.profileWeight, isDark && styles.profileWeightDark]}>
-              <Text style={[styles.profileWeightLabel, isDark && styles.labelDark]}>Current weight</Text>
-              <Text style={[styles.profileWeightValue, isDark && styles.textDark]}>{stats.weightKg || 'No weigh-in'}{stats.weightKg ? ' kg' : ''}</Text>
-              <Text style={[styles.activityHint, isDark && styles.activityHintDark]}>Weight entries are managed in Measurements and used here for goal calculations.</Text>
-            </View>
-
-            <View style={styles.chipGroup}>
-              <Text style={[styles.label, isDark && styles.labelDark]}>Gender</Text>
-              <View style={styles.chipRow}>
-                {(['Male', 'Female'] as const).map((g) => (
-                  <Pressable
-                    key={g}
-                    style={[styles.chip, isDark && styles.chipDark, stats.gender === g && styles.chipActive]}
-                    onPress={() => setStats({ ...stats, gender: g })}>
-                    <Text style={[styles.chipText, isDark && styles.chipTextDark, stats.gender === g && styles.chipTextActive]}>{g}</Text>
-                  </Pressable>
-                ))}
-              </View>
-            </View>
-
-            <View style={styles.chipGroup}>
-              <Text style={[styles.label, isDark && styles.labelDark]}>Activity Level</Text>
-              <Text style={[styles.activityHint, isDark && styles.activityHintDark]}>
-                <Text style={[styles.boldHint, isDark && styles.boldHintDark]}>Sedentary:</Text> Mostly seated daily routine{'\n'}
-                <Text style={[styles.boldHint, isDark && styles.boldHintDark]}>Light:</Text> Regular walking and errands{'\n'}
-                <Text style={[styles.boldHint, isDark && styles.boldHintDark]}>Moderate:</Text> Active daily routine{'\n'}
-                <Text style={[styles.boldHint, isDark && styles.boldHintDark]}>Very Active:</Text> Physically demanding routine{'\n'}
-                <Text style={[styles.boldHint, isDark && styles.boldHintDark]}>Extremely Active:</Text> Highly physical work or lifestyle
-              </Text>
-              <View style={styles.chipRow}>
-                {(['Sedentary', 'Light', 'Moderate', 'Very Active', 'Extremely Active'] as const).map((a) => (
-                  <Pressable
-                    key={a}
-                    style={[styles.chip, isDark && styles.chipDark, stats.activityLevel === a && styles.chipActive]}
-                    onPress={() => setStats({ ...stats, activityLevel: a })}>
-                    <Text style={[styles.chipText, isDark && styles.chipTextDark, stats.activityLevel === a && styles.chipTextActive]}>{a}</Text>
-                  </Pressable>
-                ))}
-              </View>
-            </View>
-
-            <View style={styles.chipGroup}>
-              <Text style={[styles.label, isDark && styles.labelDark]}>Nutrition Goal</Text>
-              <View style={styles.chipRow}>
-                {(['Lose Weight', 'Maintain', 'Gain Weight'] as const).map((g) => (
-                  <Pressable
-                    key={g}
-                    style={[styles.chip, isDark && styles.chipDark, stats.goal === g && styles.chipActive]}
-                    onPress={() => setStats({ ...stats, goal: g })}>
-                    <Text style={[styles.chipText, isDark && styles.chipTextDark, stats.goal === g && styles.chipTextActive]}>{g}</Text>
-                  </Pressable>
-                ))}
-              </View>
-            </View>
-
-            <Pressable style={styles.suggestButton} onPress={recommendGoals}>
-              <Text style={styles.suggestButtonText}>Apply Suggested Goals</Text>
-            </Pressable>
-          </>
-        )}
+        <Text style={[styles.cardTitle, isDark && styles.textDark]}>Macro Recommendation</Text>
+        <Text style={[styles.activityHint, isDark && styles.activityHintDark]}>Recommendations use the Body Profile and latest weigh-in saved in Measurements.</Text>
+        <Pressable style={styles.suggestButton} onPress={recommendGoals}>
+          <Text style={styles.suggestButtonText}>Apply Suggested Goals</Text>
+        </Pressable>
       </View>
 
       {/* Diabetes Management */}

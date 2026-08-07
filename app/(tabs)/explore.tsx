@@ -9,6 +9,9 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type MeasurementType = 'Waist' | 'Hips' | 'Chest' | 'Arm' | 'Thigh';
+type Gender = 'Male' | 'Female';
+type ActivityLevel = 'Sedentary' | 'Light' | 'Moderate' | 'Very Active' | 'Extremely Active';
+type NutritionGoal = 'Lose Weight' | 'Maintain' | 'Gain Weight';
 
 interface BodyMeasurement {
   id: string;
@@ -32,6 +35,15 @@ interface DailyContext {
   note?: string;
 }
 
+interface BodyStats {
+  heightCm: string;
+  weightKg: string;
+  age: string;
+  gender: Gender;
+  activityLevel: ActivityLevel;
+  goal: NutritionGoal;
+}
+
 const measurementTypes: MeasurementType[] = ['Waist', 'Hips', 'Chest', 'Arm', 'Thigh'];
 
 export default function MeasurementsScreen() {
@@ -45,9 +57,18 @@ export default function MeasurementsScreen() {
   const [stress, setStress] = useState<DailyContext['stress']>('Moderate');
   const [digestion, setDigestion] = useState<NonNullable<DailyContext['digestion']>>('Comfortable');
   const [note, setNote] = useState('');
+  const [showBodyProfile, setShowBodyProfile] = useState(false);
   const weightManager = useHistoryManager<WeightEntry>(STORAGE_KEYS.WEIGHT_HISTORY);
   const measurementManager = useHistoryManager<BodyMeasurement>(STORAGE_KEYS.BODY_MEASUREMENTS);
   const [, setContexts] = usePersistedState<DailyContext[]>(STORAGE_KEYS.DAILY_CONTEXT, []);
+  const [stats, setStats] = usePersistedState<BodyStats>(STORAGE_KEYS.BODY_STATS, {
+    heightCm: '175',
+    weightKg: '75',
+    age: '25',
+    gender: 'Male',
+    activityLevel: 'Moderate',
+    goal: 'Maintain',
+  });
 
   const logWeight = async () => {
     if (!validate.number(weight).valid) {
@@ -105,6 +126,56 @@ export default function MeasurementsScreen() {
         <Pressable style={styles.themeToggle} onPress={toggleTheme}>
           <Text style={styles.themeToggleIcon}>{colorScheme === 'dark' ? 'Dark' : colorScheme === 'light' ? 'Light' : 'Auto'}</Text>
         </Pressable>
+      </View>
+
+      <View style={[styles.card, isDark && styles.cardDark]}>
+        <View style={styles.sectionHeader}>
+          <View style={styles.sectionHeaderContent}>
+            <Text style={[styles.cardTitle, isDark && styles.textDark]}>Body Profile</Text>
+            <Text style={[styles.description, isDark && styles.mutedDark]}>Used to generate nutrition recommendations.</Text>
+          </View>
+          <Pressable style={[styles.profileToggle, isDark && styles.chipDark]} onPress={() => setShowBodyProfile(!showBodyProfile)}>
+            <Text style={[styles.profileToggleText, isDark && styles.textDark]}>{showBodyProfile ? 'Hide' : 'Edit'}</Text>
+          </Pressable>
+        </View>
+        {showBodyProfile && (
+          <>
+            <View style={styles.profileRow}>
+              <View style={styles.profileInputGroup}>
+                <Text style={[styles.label, isDark && styles.mutedDark]}>Height (cm)</Text>
+                <TextInput style={[styles.input, isDark && styles.inputDark]} value={stats.heightCm} onChangeText={(heightCm) => setStats({ ...stats, heightCm })} keyboardType="decimal-pad" />
+              </View>
+              <View style={styles.profileInputGroup}>
+                <Text style={[styles.label, isDark && styles.mutedDark]}>Age</Text>
+                <TextInput style={[styles.input, isDark && styles.inputDark]} value={stats.age} onChangeText={(age) => setStats({ ...stats, age })} keyboardType="number-pad" />
+              </View>
+            </View>
+            <Text style={[styles.label, isDark && styles.mutedDark]}>Sex</Text>
+            <View style={styles.typeRow}>
+              {(['Male', 'Female'] as const).map((gender) => (
+                <Pressable key={gender} style={[styles.chip, isDark && styles.chipDark, stats.gender === gender && styles.chipActive]} onPress={() => setStats({ ...stats, gender })}>
+                  <Text style={[styles.chipText, isDark && styles.textDark, stats.gender === gender && styles.chipTextActive]}>{gender}</Text>
+                </Pressable>
+              ))}
+            </View>
+            <Text style={[styles.label, isDark && styles.mutedDark]}>Activity level</Text>
+            <View style={styles.typeRow}>
+              {(['Sedentary', 'Light', 'Moderate', 'Very Active', 'Extremely Active'] as const).map((activityLevel) => (
+                <Pressable key={activityLevel} style={[styles.chip, isDark && styles.chipDark, stats.activityLevel === activityLevel && styles.chipActive]} onPress={() => setStats({ ...stats, activityLevel })}>
+                  <Text style={[styles.chipText, isDark && styles.textDark, stats.activityLevel === activityLevel && styles.chipTextActive]}>{activityLevel}</Text>
+                </Pressable>
+              ))}
+            </View>
+            <Text style={[styles.label, isDark && styles.mutedDark]}>Nutrition goal</Text>
+            <View style={styles.typeRow}>
+              {(['Lose Weight', 'Maintain', 'Gain Weight'] as const).map((goal) => (
+                <Pressable key={goal} style={[styles.chip, isDark && styles.chipDark, stats.goal === goal && styles.chipActive]} onPress={() => setStats({ ...stats, goal })}>
+                  <Text style={[styles.chipText, isDark && styles.textDark, stats.goal === goal && styles.chipTextActive]}>{goal}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </>
+        )}
       </View>
 
       <View style={[styles.card, isDark && styles.cardDark]}>
@@ -238,6 +309,12 @@ const styles = StyleSheet.create({
   contextSection: { marginTop: 20, paddingTop: 20, borderTopWidth: 1, borderTopColor: '#e2e8f0' },
   contextSectionDark: { borderTopColor: '#333' },
   cardTitle: { fontSize: 20, fontWeight: '700', color: '#111827' },
+  sectionHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 },
+  sectionHeaderContent: { flex: 1 },
+  profileToggle: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, backgroundColor: '#e2e8f0' },
+  profileToggleText: { color: '#334155', fontSize: 13, fontWeight: '700' },
+  profileRow: { flexDirection: 'row', gap: 12, marginTop: 4 },
+  profileInputGroup: { flex: 1 },
   description: { marginTop: 8, marginBottom: 20, color: '#64748b', lineHeight: 20 },
   label: { fontSize: 14, fontWeight: '600', color: '#64748b', marginBottom: 8 },
   contextLabel: { marginTop: 12 },
