@@ -36,7 +36,7 @@ interface InsulinEntry {
 
 type Gender = 'Male' | 'Female';
 type ActivityLevel = 'Sedentary' | 'Light' | 'Moderate' | 'Very Active' | 'Extremely Active';
-type TrainingGoal = 'Lose Fat' | 'Maintain' | 'Gain Muscle';
+type NutritionGoal = 'Lose Weight' | 'Maintain' | 'Gain Weight';
 
 interface BodyStats {
   heightCm: string;
@@ -44,7 +44,7 @@ interface BodyStats {
   age: string;
   gender: Gender;
   activityLevel: ActivityLevel;
-  goal: TrainingGoal;
+  goal: NutritionGoal;
 }
 
 export default function GoalsScreen() {
@@ -165,25 +165,22 @@ export default function GoalsScreen() {
 
     // Adjust for goal
     let calories: number;
-    if (stats.goal === 'Lose Fat') {
+    if (stats.goal === 'Lose Weight') {
       calories = tdee - 500; // ~0.5kg/week loss
-    } else if (stats.goal === 'Gain Muscle') {
+    } else if (stats.goal === 'Gain Weight') {
       calories = tdee + 400; // ~0.5kg/week gain
     } else {
       calories = tdee;
     }
 
-    // Protein: Jeff Nippard / sports nutrition research recommendations
+    // Protein targets support general nutrition and body-weight goals.
     let proteinPerKg: number;
-    if (stats.goal === 'Lose Fat') {
-      // Cutting: 1.8-2.7 g/kg (0.8-1.2 g/lb) - use mid-high range
-      proteinPerKg = 2.3;
-    } else if (stats.goal === 'Gain Muscle') {
-      // Bulking: 1.6-2.2 g/kg (0.7-1.0 g/lb) - use upper range
-      proteinPerKg = 2.0;
+    if (stats.goal === 'Lose Weight') {
+      proteinPerKg = 1.8;
+    } else if (stats.goal === 'Gain Weight') {
+      proteinPerKg = 1.6;
     } else {
-      // Maintenance/Recomp: 1.6-2.2 g/kg - use middle range
-      proteinPerKg = 1.9;
+      proteinPerKg = 1.6;
     }
 
     const protein = Math.round(proteinPerKg * weightKg);
@@ -196,7 +193,7 @@ export default function GoalsScreen() {
       fatGrams = Math.round(0.9 * weightKg);
     } else {
       // Default: calculate as percent of total calories, but enforce a minimum per-kg floor
-      const fatPercent = stats.goal === 'Gain Muscle' ? 0.30 : 0.25; // gain needs slightly more fat
+      const fatPercent = stats.goal === 'Gain Weight' ? 0.30 : 0.25;
       const fatCalories = Math.round(calories * fatPercent);
       const fatFromCalories = Math.round(fatCalories / 9);
       const minFatKg = Math.round(0.8 * weightKg); // minimum grams per kg
@@ -285,12 +282,12 @@ export default function GoalsScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <ScrollView style={[styles.container, isDark && styles.containerDark]}>
       <View style={[styles.header, isDark && styles.headerDark, { paddingTop: Math.max(insets.top, 16) }]}>
-        <Text style={[styles.headerTitle, isDark && styles.textDark]}>Goals & Settings</Text>
+        <Text style={[styles.headerTitle, isDark && styles.textDark]}>Goals and Settings</Text>
       </View>
 
       {/* Macro Goals */}
       <View style={[styles.card, isDark && styles.cardDark]}>
-        <Text style={[styles.cardTitle, isDark && styles.textDark]}>🎯 Daily Macro Goals</Text>
+        <Text style={[styles.cardTitle, isDark && styles.textDark]}>Daily Macro Goals</Text>
         
         <View style={styles.inputGroup}>
           <Text style={[styles.label, isDark && styles.labelDark]}>Calories (kcal)</Text>
@@ -357,7 +354,7 @@ export default function GoalsScreen() {
             </Pressable>
           </View>
           <Text style={[styles.activityHint, isDark && styles.activityHintDark]}>
-            Fat is calculated as % of energy (25% default, 30% when bulking) with a safe minimum of 0.8 g/kg to protect health. Switch to “By weight” if you prefer a fixed g/kg target.
+            Fat is calculated as a percentage of energy (25% by default, 30% for weight gain) with a minimum of 0.8 g/kg. Switch to “By weight” for a fixed g/kg target.
           </Text>
         </View>
 
@@ -374,14 +371,14 @@ export default function GoalsScreen() {
         </View>
 
         <Pressable style={styles.saveButton} onPress={saveGoals}>
-          <Text style={styles.saveButtonText}>💾 Save Goals</Text>
+          <Text style={styles.saveButtonText}>Save Goals</Text>
         </Pressable>
       </View>
 
       {/* Body Stats & Recommendation */}
       <View style={[styles.card, isDark && styles.cardDark]}>
         <View style={styles.bodyHeaderRow}>
-          <Text style={[styles.cardTitle, isDark && styles.textDark]}>📏 Body Stats</Text>
+          <Text style={[styles.cardTitle, isDark && styles.textDark]}>Body Stats</Text>
           <Pressable style={[styles.toggleButton, isDark && styles.toggleButtonDark]} onPress={() => setShowBodyStats(!showBodyStats)}>
             <Text style={[styles.toggleButtonText, isDark && styles.toggleButtonTextDark]}>{showBodyStats ? 'Hide' : 'Show'}</Text>
           </Pressable>
@@ -442,11 +439,11 @@ export default function GoalsScreen() {
             <View style={styles.chipGroup}>
               <Text style={[styles.label, isDark && styles.labelDark]}>Activity Level</Text>
               <Text style={[styles.activityHint, isDark && styles.activityHintDark]}>
-                <Text style={[styles.boldHint, isDark && styles.boldHintDark]}>Sedentary:</Text> Little/no exercise, desk job{'\n'}
-                <Text style={[styles.boldHint, isDark && styles.boldHintDark]}>Light:</Text> Exercise 1-3 days/week{'\n'}
-                <Text style={[styles.boldHint, isDark && styles.boldHintDark]}>Moderate:</Text> Exercise 3-5 days/week{'\n'}
-                <Text style={[styles.boldHint, isDark && styles.boldHintDark]}>Very Active:</Text> Exercise 6-7 days/week{'\n'}
-                <Text style={[styles.boldHint, isDark && styles.boldHintDark]}>Extremely Active:</Text> Physical job + daily training
+                <Text style={[styles.boldHint, isDark && styles.boldHintDark]}>Sedentary:</Text> Mostly seated daily routine{'\n'}
+                <Text style={[styles.boldHint, isDark && styles.boldHintDark]}>Light:</Text> Regular walking and errands{'\n'}
+                <Text style={[styles.boldHint, isDark && styles.boldHintDark]}>Moderate:</Text> Active daily routine{'\n'}
+                <Text style={[styles.boldHint, isDark && styles.boldHintDark]}>Very Active:</Text> Physically demanding routine{'\n'}
+                <Text style={[styles.boldHint, isDark && styles.boldHintDark]}>Extremely Active:</Text> Highly physical work or lifestyle
               </Text>
               <View style={styles.chipRow}>
                 {(['Sedentary', 'Light', 'Moderate', 'Very Active', 'Extremely Active'] as const).map((a) => (
@@ -461,9 +458,9 @@ export default function GoalsScreen() {
             </View>
 
             <View style={styles.chipGroup}>
-              <Text style={[styles.label, isDark && styles.labelDark]}>Training Goal</Text>
+              <Text style={[styles.label, isDark && styles.labelDark]}>Nutrition Goal</Text>
               <View style={styles.chipRow}>
-                {(['Lose Fat', 'Maintain', 'Gain Muscle'] as const).map((g) => (
+                {(['Lose Weight', 'Maintain', 'Gain Weight'] as const).map((g) => (
                   <Pressable
                     key={g}
                     style={[styles.chip, isDark && styles.chipDark, stats.goal === g && styles.chipActive]}
@@ -475,7 +472,7 @@ export default function GoalsScreen() {
             </View>
 
             <Pressable style={styles.suggestButton} onPress={recommendGoals}>
-              <Text style={styles.suggestButtonText}>✨ Apply Suggested Goals</Text>
+              <Text style={styles.suggestButtonText}>Apply Suggested Goals</Text>
             </Pressable>
           </>
         )}
@@ -483,7 +480,7 @@ export default function GoalsScreen() {
 
       {/* Body Weight Tracking */}
       <View style={[styles.card, isDark && styles.cardDark]}>
-        <Text style={[styles.cardTitle, isDark && styles.textDark]}>⚖️ Body Weight</Text>
+        <Text style={[styles.cardTitle, isDark && styles.textDark]}>Body Weight</Text>
         
         <View style={styles.weightInputRow}>
           <TextInput
@@ -518,14 +515,10 @@ export default function GoalsScreen() {
         )}
       </View>
 
-      {/* Dark Mode */}
-      <View style={[styles.card, isDark && styles.cardDark]}>
-      </View>
-
       {/* Diabetes Management */}
       <View style={[styles.card, isDark && styles.cardDark]}>
         <View style={styles.bodyHeaderRow}>
-          <Text style={[styles.cardTitle, isDark && styles.textDark]}>💉 Diabetes Management</Text>
+          <Text style={[styles.cardTitle, isDark && styles.textDark]}>Diabetes Management</Text>
           <Pressable style={[styles.toggleButtonCircle, isDark && styles.toggleButtonDark, diabetesMode && styles.toggleButtonActive]} onPress={toggleDiabetesMode}>
             <View style={[styles.circleIndicator, diabetesMode && styles.circleIndicatorFilled]} />
           </Pressable>
@@ -1001,10 +994,11 @@ const styles = StyleSheet.create({
     gap: 12,
     marginTop: 4,
     marginBottom: 20,
-    paddingHorizontal: 4,
+    width: '100%',
   },
   weightInput: {
     flex: 1,
+    minWidth: 0,
     backgroundColor: Palette.lightGray2,
     padding: 12,
     borderRadius: 8,
@@ -1027,6 +1021,7 @@ const styles = StyleSheet.create({
     color: '#d1d5db',
   },
   logButton: {
+    flexShrink: 0,
     backgroundColor: Palette.primary,
     paddingHorizontal: 24,
     paddingVertical: 12,

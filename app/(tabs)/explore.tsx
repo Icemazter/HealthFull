@@ -1,369 +1,247 @@
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
 import { Palette } from '@/constants/theme';
+import { useHistoryManager } from '@/hooks/use-persisted-state';
 import { useAppTheme } from '@/hooks/use-theme';
+import { feedback, validate } from '@/utils/feedback';
 import { storage, STORAGE_KEYS } from '@/utils/storage';
-import { router } from 'expo-router';
-import React, { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-interface Routine {
+type MeasurementType = 'Waist' | 'Hips' | 'Chest' | 'Arm' | 'Thigh';
+
+interface BodyMeasurement {
   id: string;
-  name: string;
-  exercises: string[];
-  lastUsed?: number;
+  type: MeasurementType;
+  value: string;
+  timestamp: number;
 }
 
-interface WorkoutTemplate {
-  id: string;
-  name: string;
-  exercises: Array<{ exerciseId: string; exerciseName: string }>;
-  createdAt: number;
+interface WeightEntry {
+  date: string;
+  weight: string;
+  timestamp: number;
 }
 
-export default function WorkoutHubScreen() {
+interface DailyContext {
+  timestamp: number;
+  sleepHours?: string;
+  hunger?: 'Low' | 'Moderate' | 'High';
+  stress?: 'Low' | 'Moderate' | 'High';
+  digestion?: 'Comfortable' | 'Mixed' | 'Uncomfortable';
+  note?: string;
+}
+
+const measurementTypes: MeasurementType[] = ['Waist', 'Hips', 'Chest', 'Arm', 'Thigh'];
+
+export default function MeasurementsScreen() {
   const insets = useSafeAreaInsets();
   const { isDark, colorScheme, toggleTheme } = useAppTheme();
-  const [recentRoutines, setRecentRoutines] = useState<Routine[]>([]);
-  const [workoutHistory, setWorkoutHistory] = useState<any[]>([]);
-  const [templates, setTemplates] = useState<WorkoutTemplate[]>([]);
+  const [weight, setWeight] = useState('');
+  const [measurement, setMeasurement] = useState('');
+  const [type, setType] = useState<MeasurementType>('Waist');
+  const [sleepHours, setSleepHours] = useState('');
+  const [hunger, setHunger] = useState<DailyContext['hunger']>('Moderate');
+  const [stress, setStress] = useState<DailyContext['stress']>('Moderate');
+  const [note, setNote] = useState('');
+  const weightManager = useHistoryManager<WeightEntry>(STORAGE_KEYS.WEIGHT_HISTORY);
+  const measurementManager = useHistoryManager<BodyMeasurement>(STORAGE_KEYS.BODY_MEASUREMENTS);
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadData = async () => {
-    try {
-      const routines = await storage.get<Routine[]>(STORAGE_KEYS.WORKOUT_ROUTINES, []);
-      setRecentRoutines((routines ?? []).slice(0, 3));
-      
-      const history = await storage.get<any[]>(STORAGE_KEYS.WORKOUT_HISTORY, []);
-      setWorkoutHistory(history ?? []);
-      
-      const templatesData = await storage.get<WorkoutTemplate[]>(STORAGE_KEYS.WORKOUT_TEMPLATES, []);
-      setTemplates(templatesData ?? []);
-    } catch (error) {
-      console.error('Failed to load workout data:', error);
+  const logWeight = async () => {
+    if (!validate.number(weight).valid) {
+      return feedback.error('Please enter a valid weight.', 'Invalid Weight');
     }
-  };
 
-  const startEmptyWorkout = () => {
-    router.push('/workout');
-  };
-
-  const startRoutine = (routine: Routine) => {
-    router.push({
-      pathname: '/workout',
-      params: { routineId: routine.id },
+    await weightManager.add({
+      date: new Date().toLocaleDateString(),
+      weight,
+      timestamp: Date.now(),
     });
+    setWeight('');
+    await feedback.success();
   };
 
-  const startTemplate = (template: WorkoutTemplate) => {
-    router.push({
-      pathname: '/workout',
-      params: { templateId: template.id, templateName: template.name },
+  const logMeasurement = async () => {
+    if (!validate.number(measurement).valid) {
+      return feedback.error('Please enter a valid measurement.', 'Invalid Measurement');
+    }
+
+    await measurementManager.add({
+      id: `${Date.now()}-${type}`,
+      type,
+      value: measurement,
+      timestamp: Date.now(),
     });
+    setMeasurement('');
+    await feedback.success();
+  };
+
+  const saveContext = async () => {
+    const context: DailyContext = {
+      timestamp: Date.now(),
+      sleepHours: sleepHours || undefined,
+      hunger,
+      stress,
+      note: note.trim() || undefined,
+    };
+    await storage.set(STORAGE_KEYS.DAILY_CONTEXT, context);
+    setNote('');
+    await feedback.success('Daily context saved.');
   };
 
   return (
-    <>
-      <ScrollView style={[styles.container, isDark && styles.containerDark]}>
-      <ThemedView style={[styles.header, isDark && styles.headerDark, { paddingTop: Math.max(insets.top, 16) }]}>
-        <ThemedText type="title" style={[styles.headerTitle, isDark && styles.headerTitleDark]}>Workout Hub</ThemedText>
+    <ScrollView
+      style={[styles.container, isDark && styles.containerDark]}
+      contentContainerStyle={styles.content}>
+      <View style={[styles.header, isDark && styles.headerDark, { paddingTop: Math.max(insets.top, 16) }]}>
+        <Text style={[styles.headerTitle, isDark && styles.textDark]}>Measurements</Text>
         <Pressable style={styles.themeToggle} onPress={toggleTheme}>
-          <Text style={styles.themeToggleIcon}>{colorScheme === 'dark' ? '🌙' : colorScheme === 'light' ? '☀️' : '🌗'}</Text>
+          <Text style={styles.themeToggleIcon}>{colorScheme === 'dark' ? 'Dark' : colorScheme === 'light' ? 'Light' : 'Auto'}</Text>
         </Pressable>
-      </ThemedView>
+      </View>
 
-      <View style={styles.content}>
-        <Pressable
-          style={[styles.startWorkoutButton, isDark && styles.startWorkoutButtonDark]}
-          onPress={startEmptyWorkout}>
-          <Text style={styles.startWorkoutText}>Start Empty Workout</Text>
-        </Pressable>
+      <View style={[styles.card, isDark && styles.cardDark]}>
+        <Text style={[styles.cardTitle, isDark && styles.textDark]}>Body Weight</Text>
+        <Text style={[styles.description, isDark && styles.mutedDark]}>Log a consistent weigh-in to follow your trend over time.</Text>
+        <View style={styles.inputRow}>
+          <TextInput
+            style={[styles.input, isDark && styles.inputDark]}
+            value={weight}
+            onChangeText={setWeight}
+            keyboardType="decimal-pad"
+            placeholder="75.5"
+            placeholderTextColor={isDark ? '#666' : '#999'}
+          />
+          <Text style={[styles.unit, isDark && styles.mutedDark]}>kg</Text>
+          <Pressable style={styles.logButton} onPress={logWeight}>
+            <Text style={styles.logButtonText}>Log</Text>
+          </Pressable>
+        </View>
 
-      {recentRoutines.length > 0 && (
-        <ThemedView style={styles.section}>
-          <ThemedText type="subtitle" style={[styles.sectionTitle, isDark && styles.sectionTitleDark]}>
-            Quick Start Routines
-          </ThemedText>
-          {recentRoutines.map((routine) => (
+        <View style={[styles.card, isDark && styles.cardDark]}>
+          <Text style={[styles.cardTitle, isDark && styles.textDark]}>Daily context</Text>
+          <Text style={[styles.description, isDark && styles.mutedDark]}>Optional context helps interpret normal changes in weight and appetite.</Text>
+          <Text style={[styles.label, isDark && styles.mutedDark]}>Sleep hours</Text>
+          <TextInput
+            style={[styles.input, isDark && styles.inputDark]}
+            value={sleepHours}
+            onChangeText={setSleepHours}
+            keyboardType="decimal-pad"
+            placeholder="7.5"
+            placeholderTextColor={isDark ? '#666' : '#999'}
+          />
+          <Text style={[styles.label, styles.contextLabel, isDark && styles.mutedDark]}>Hunger</Text>
+          <View style={styles.typeRow}>
+            {(['Low', 'Moderate', 'High'] as const).map((value) => (
+              <Pressable key={value} style={[styles.chip, isDark && styles.chipDark, hunger === value && styles.chipActive]} onPress={() => setHunger(value)}>
+                <Text style={[styles.chipText, isDark && styles.textDark, hunger === value && styles.chipTextActive]}>{value}</Text>
+              </Pressable>
+            ))}
+          </View>
+          <Text style={[styles.label, styles.contextLabel, isDark && styles.mutedDark]}>Stress</Text>
+          <View style={styles.typeRow}>
+            {(['Low', 'Moderate', 'High'] as const).map((value) => (
+              <Pressable key={value} style={[styles.chip, isDark && styles.chipDark, stress === value && styles.chipActive]} onPress={() => setStress(value)}>
+                <Text style={[styles.chipText, isDark && styles.textDark, stress === value && styles.chipTextActive]}>{value}</Text>
+              </Pressable>
+            ))}
+          </View>
+          <TextInput
+            style={[styles.input, styles.noteInput, isDark && styles.inputDark]}
+            value={note}
+            onChangeText={setNote}
+            placeholder="Optional note"
+            placeholderTextColor={isDark ? '#666' : '#999'}
+          />
+          <Pressable style={[styles.logButton, styles.contextButton]} onPress={saveContext}>
+            <Text style={styles.logButtonText}>Save context</Text>
+          </Pressable>
+        </View>
+        {weightManager.history.slice(0, 5).map((entry) => (
+          <View key={entry.timestamp} style={[styles.entry, isDark && styles.entryDark]}>
+            <Text style={[styles.entryValue, isDark && styles.textDark]}>{entry.weight} kg</Text>
+            <Text style={[styles.entryDate, isDark && styles.mutedDark]}>{entry.date}</Text>
+            <Pressable onPress={() => weightManager.remove(entry.timestamp)}>
+              <Text style={styles.delete}>Remove</Text>
+            </Pressable>
+          </View>
+        ))}
+      </View>
+
+      <View style={[styles.card, isDark && styles.cardDark]}>
+        <Text style={[styles.cardTitle, isDark && styles.textDark]}>Body Measurements</Text>
+        <Text style={[styles.description, isDark && styles.mutedDark]}>Track circumferences in centimeters to see changes beyond the scale.</Text>
+        <View style={styles.typeRow}>
+          {measurementTypes.map((measurementType) => (
             <Pressable
-              key={routine.id}
-              style={[styles.routineCard, isDark && styles.routineCardDark]}
-              onPress={() => startRoutine(routine)}>
-              <Text style={[styles.routineName, isDark && styles.routineNameDark]}>{routine.name}</Text>
-              <Text style={[styles.routineDetail, isDark && styles.routineDetailDark]}>
-                {routine.exercises.length} exercises
-              </Text>
+              key={measurementType}
+              style={[styles.chip, isDark && styles.chipDark, type === measurementType && styles.chipActive]}
+              onPress={() => setType(measurementType)}>
+              <Text style={[styles.chipText, isDark && styles.textDark, type === measurementType && styles.chipTextActive]}>{measurementType}</Text>
             </Pressable>
           ))}
-        </ThemedView>
-      )}
-
-      {templates.length > 0 && (
-        <ThemedView style={styles.section}>
-          <ThemedText type="subtitle" style={[styles.sectionTitle, isDark && styles.sectionTitleDark]}>
-            💾 Saved Templates
-          </ThemedText>
-          {templates.map((template) => (
-            <View key={template.id} style={styles.templateCard}>
-              <Pressable
-                style={[styles.templateContent, isDark && styles.templateContentDark]}
-                onPress={() => startTemplate(template)}>
-                <Text style={[styles.templateName, isDark && styles.templateNameDark]}>{template.name}</Text>
-                <Text style={[styles.templateDetail, isDark && styles.templateDetailDark]}>
-                  {template.exercises.length} exercises
-                </Text>
-              </Pressable>
-            </View>
-          ))}
-        </ThemedView>
-      )}
-
-      <View style={styles.linksContainer}>
-        <Pressable
-          style={[styles.linkButton, isDark && styles.linkButtonDark]}
-          onPress={() => router.push('/routines')}>
-          <Text style={[styles.linkText, isDark && styles.linkTextDark]}>📋 Manage Routines</Text>
-        </Pressable>
-
-        <Pressable
-          style={[styles.linkButton, isDark && styles.linkButtonDark]}
-          onPress={() => router.push('/history')}>
-          <Text style={[styles.linkText, isDark && styles.linkTextDark]}>📊 Workout History</Text>
-          {workoutHistory.length > 0 && (
-            <Text style={styles.linkBadge}>{workoutHistory.length}</Text>
-          )}
-        </Pressable>
-      </View>
-
-      {workoutHistory.length > 0 && (
-        <ThemedView style={[styles.statsCard, isDark && styles.statsCardDark]}>
-          <Text style={[styles.statsTitle, isDark && styles.statsTitleDark]}>This Week</Text>
-          <View style={styles.statsRow}>
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>
-                {workoutHistory.filter(w => 
-                  w.timestamp > Date.now() - 7 * 24 * 60 * 60 * 1000
-                ).length}
-              </Text>
-              <Text style={styles.statLabel}>Workouts</Text>
-            </View>
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>
-                {workoutHistory.reduce((acc, w) => 
-                  acc + (w.exercises?.length || 0), 0
-                )}
-              </Text>
-              <Text style={styles.statLabel}>Total Exercises</Text>
-            </View>
+        </View>
+        <View style={styles.inputRow}>
+          <TextInput
+            style={[styles.input, isDark && styles.inputDark]}
+            value={measurement}
+            onChangeText={setMeasurement}
+            keyboardType="decimal-pad"
+            placeholder="80"
+            placeholderTextColor={isDark ? '#666' : '#999'}
+          />
+          <Text style={[styles.unit, isDark && styles.mutedDark]}>cm</Text>
+          <Pressable style={styles.logButton} onPress={logMeasurement}>
+            <Text style={styles.logButtonText}>Log</Text>
+          </Pressable>
+        </View>
+        {measurementManager.history.slice(0, 10).map((entry) => (
+          <View key={entry.id} style={[styles.entry, isDark && styles.entryDark]}>
+            <Text style={[styles.entryValue, isDark && styles.textDark]}>{entry.type}: {entry.value} cm</Text>
+            <Text style={[styles.entryDate, isDark && styles.mutedDark]}>{new Date(entry.timestamp).toLocaleDateString()}</Text>
+            <Pressable onPress={() => measurementManager.remove(entry.timestamp)}>
+              <Text style={styles.delete}>Remove</Text>
+            </Pressable>
           </View>
-        </ThemedView>
-      )}
+        ))}
       </View>
     </ScrollView>
-    </>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Palette.white,
-    padding: 0,
-  },
-  containerDark: {
-    backgroundColor: '#0a0a0a',
-  },
-  header: {
-    paddingBottom: 20,
-    paddingHorizontal: 20,
-    backgroundColor: Palette.lightGray,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e5e5',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  headerDark: {
-    backgroundColor: '#1a1a1a',
-    borderBottomColor: '#333',
-  },
-  headerTitle: {
-    color: Palette.primary,
-    fontWeight: '700',
-    flex: 1,
-  },
-  headerTitleDark: {
-    color: '#60a5fa',
-  },
-  themeToggle: {
-    padding: 8,
-    marginLeft: 8,
-  },
-  themeToggleIcon: {
-    fontSize: 24,
-  },
-  content: {
-    padding: 16,
-  },
-  startWorkoutButton: {
-    backgroundColor: Palette.primary,
-    padding: 20,
-    borderRadius: 16,
-    alignItems: 'center',
-    marginBottom: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  startWorkoutButtonDark: {
-    backgroundColor: '#1e3a8a',
-  },
-  startWorkoutText: {
-    color: '#fff',
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
-  section: {
-    marginBottom: 24,
-  },
-  sectionTitle: {
-    marginBottom: 12,
-  },
-  sectionTitleDark: {
-    color: '#60a5fa',
-  },
-  routineCard: {
-    backgroundColor: '#f9f9f9',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-  },
-  routineCardDark: {
-    backgroundColor: '#1a1a1a',
-    borderColor: '#333',
-  },
-  routineName: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 4,
-  },
-  routineNameDark: {
-    color: '#e5e5e5',
-  },
-  routineDetail: {
-    fontSize: 14,
-    color: '#666',
-  },
-  routineDetailDark: {
-    color: '#9ca3af',
-  },
-  templateCard: {
-    marginBottom: 10,
-  },
-  templateContent: {
-    backgroundColor: '#f3f4f6',
-    padding: 14,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-  },
-  templateContentDark: {
-    backgroundColor: '#2a2a2a',
-    borderColor: '#444',
-  },
-  templateName: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 4,
-  },
-  templateNameDark: {
-    color: '#e5e5e5',
-  },
-  templateDetail: {
-    fontSize: 13,
-    color: '#666',
-  },
-  templateDetailDark: {
-    color: '#9ca3af',
-  },
-  linksContainer: {
-    marginBottom: 24,
-    gap: 12,
-  },
-  linkButton: {
-    backgroundColor: '#f0f9ff',
-    padding: 16,
-    borderRadius: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderWidth: 1,
-    borderColor: '#bfdbfe',
-  },
-  linkButtonDark: {
-    backgroundColor: '#1a1a1a',
-    borderColor: '#333',
-  },
-  linkText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#0066cc',
-  },
-  linkTextDark: {
-    color: '#60a5fa',
-  },
-  linkBadge: {
-    backgroundColor: '#0066cc',
-    color: '#fff',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 12,
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  statsCard: {
-    backgroundColor: '#f0f9ff',
-    padding: 20,
-    borderRadius: 16,
-    marginBottom: 24,
-  },
-  statsCardDark: {
-    backgroundColor: '#1a1a1a',
-  },
-  statsTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 16,
-  },
-  statsTitleDark: {
-    color: '#60a5fa',
-  },
-  statsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-  },
-  statItem: {
-    alignItems: 'center',
-  },
-  statValue: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#0066cc',
-  },
-  statLabel: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 4,
-  },
+  container: { flex: 1, backgroundColor: Palette.white },
+  containerDark: { backgroundColor: '#0a0a0a' },
+  header: { paddingBottom: 20, paddingHorizontal: 20, backgroundColor: Palette.lightGray, borderBottomWidth: 1, borderBottomColor: '#e5e5e5', flexDirection: 'row', alignItems: 'center' },
+  headerDark: { backgroundColor: '#1a1a1a', borderBottomColor: '#333' },
+  headerTitle: { fontSize: 32, fontWeight: 'bold', color: Palette.primary, flex: 1 },
+  themeToggle: { paddingVertical: 8, paddingHorizontal: 10, borderRadius: 8, backgroundColor: '#e2e8f0' },
+  themeToggleIcon: { fontSize: 12, fontWeight: '700', color: '#334155' },
+  content: { paddingBottom: 32 },
+  card: { marginHorizontal: 16, marginTop: 20, padding: 24, borderRadius: 16, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0' },
+  cardDark: { backgroundColor: '#1a1a1a', borderColor: '#333' },
+  cardTitle: { fontSize: 20, fontWeight: '700', color: '#111827' },
+  description: { marginTop: 8, marginBottom: 20, color: '#64748b', lineHeight: 20 },
+  label: { fontSize: 14, fontWeight: '600', color: '#64748b', marginBottom: 8 },
+  contextLabel: { marginTop: 12 },
+  inputRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  input: { flex: 1, minWidth: 0, padding: 14, borderRadius: 10, borderWidth: 1, borderColor: '#cbd5e1', backgroundColor: '#fff', fontSize: 16, color: '#111827' },
+  inputDark: { backgroundColor: '#262626', borderColor: '#444', color: '#f5f5f5' },
+  unit: { fontSize: 16, fontWeight: '600', color: '#64748b' },
+  logButton: { flexShrink: 0, backgroundColor: Palette.primary, paddingHorizontal: 18, paddingVertical: 14, borderRadius: 10 },
+  logButtonText: { color: '#fff', fontWeight: '700' },
+  typeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 18 },
+  chip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 16, backgroundColor: '#e2e8f0' },
+  chipDark: { backgroundColor: '#333' },
+  chipActive: { backgroundColor: Palette.primary },
+  chipText: { color: '#334155', fontWeight: '600' },
+  chipTextActive: { color: '#fff' },
+  entry: { flexDirection: 'row', alignItems: 'center', marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: '#e2e8f0' },
+  entryDark: { borderTopColor: '#333' },
+  entryValue: { flex: 1, fontSize: 16, fontWeight: '600', color: '#111827' },
+  entryDate: { fontSize: 13, color: '#64748b', marginRight: 12 },
+  delete: { color: '#dc2626', fontSize: 13, fontWeight: '600' },
+  textDark: { color: '#f5f5f5' },
+  mutedDark: { color: '#a3a3a3' },
+  noteInput: { marginTop: 4, minHeight: 48 },
+  contextButton: { alignSelf: 'flex-start', marginTop: 16 },
 });

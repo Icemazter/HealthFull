@@ -109,11 +109,8 @@ export const STORAGE_KEYS = {
   DIABETES_MODE: 'diabetes_mode',
   DARK_MODE: 'dark_mode_preference',
   WATER_TODAY: 'water_today',
-  WORKOUT_HISTORY: 'workout_history',
-  WORKOUT_ROUTINES: 'workout_routines',
-  WORKOUT_TEMPLATES: 'workout_templates',
+  BODY_MEASUREMENTS: 'body_measurements',
+  DAILY_CONTEXT: 'daily_context',
   RECIPES: 'recipes',
-  HEVY_API_KEY: 'hevy_api_key',
-  CUSTOM_EXERCISES: 'custom_exercises',
   LAST_INGREDIENT_WEIGHT: 'last_ingredient_weight',
 } as const;

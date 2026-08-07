@@ -1,12 +1,12 @@
-# HealthFull - Gym & Nutrition Tracker
+# HealthFull - Macro & Body Measurement Tracker
 
-iOS-focused health tracker with barcode-based macro logging and exercise tracking.
+iOS-focused health tracker with barcode-based macro logging, body-weight, and circumference tracking.
 
 ## Features
 
 - **Barcode Scanning**: Scan product barcodes to fetch nutrition data from OpenFoodFacts API
 - **Macro Tracking**: View daily totals for calories, protein, carbs, and fat
-- **Exercise Logging**: Track sets, reps, and weights for workouts
+- **Body Measurements**: Track body weight and circumference measurements over time
 - **Local Storage**: All data stored locally on device using AsyncStorage
 
 ## Tech Stack
@@ -69,7 +69,7 @@ npx expo start --tunnel
 ## Project Structure
 
 - `app/(tabs)/index.tsx` - Nutrition home screen with daily macro totals
-- `app/(tabs)/explore.tsx` - Exercise logging interface
+- `app/(tabs)/explore.tsx` - Body-weight and circumference measurement tracking
 - `app/scan.tsx` - Barcode scanner screen
 - `app/_layout.tsx` - Root navigation layout
 
@@ -77,13 +77,13 @@ npx expo start --tunnel
 
 1. **Scan Food**: Tap "Scan Barcode" on the Nutrition tab, point camera at a product barcode
 2. **View Macros**: Home screen displays daily totals and food log
-3. **Log Exercise**: Use Exercise tab to add sets/reps/weight for workouts
+3. **Log Measurements**: Use Measurements to record body weight and circumferences
 
 ## Next Steps
 
 - Add macro goals and progress tracking
 - Weekly/monthly summaries
-- Exercise history and PR tracking
+- Measurement trend charts
 - Cloud sync with user accounts
 - Custom food entry (manual input)
 

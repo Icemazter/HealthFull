@@ -36,6 +36,8 @@ export default function ScanScreen() {
   const [loading, setLoading] = useState(false);
   const [lastScanTime, setLastScanTime] = useState(0);
   const [cameraKey, setCameraKey] = useState(0);
+  const [nativeCameraState, setNativeCameraState] = useState<'loading' | 'permission-needed' | 'ready' | 'unavailable' | 'error'>('loading');
+  const [nativeCameraError, setNativeCameraError] = useState<string | null>(null);
   const [foodData, setFoodData] = useState<FoodData | null>(null);
   const [showOptions, setShowOptions] = useState(false);
   const [customAmount, setCustomAmount] = useState('100');
@@ -59,6 +61,7 @@ export default function ScanScreen() {
   const webScannerRunningRef = useRef(false);
   const webScannerControlsRef = useRef<any>(null);
   const [webScannerActive, setWebScannerActive] = useState(false);
+  const [webCameraError, setWebCameraError] = useState<string | null>(null);
   const [isWeb] = useState(Platform.OS === 'web');
   const [showManualEntry, setShowManualEntry] = useState(false);
 
@@ -86,7 +89,7 @@ export default function ScanScreen() {
   ).current;
 
   useEffect(() => {
-    // Initialize web camera if on web platform
+    // On web, wait for the user to request scanning so mobile browsers permit camera access.
     if (isWeb) {
       initWebCamera();
     }
@@ -114,12 +117,6 @@ export default function ScanScreen() {
     };
   }, [isWeb]);
 
-  useEffect(() => {
-    if (isWeb && permission?.granted) {
-      initWebCamera();
-    }
-  }, [isWeb, permission?.granted]);
-
   // Reset scanned state when screen comes into focus
   useFocusEffect(
     useCallback(() => {
@@ -127,15 +124,16 @@ export default function ScanScreen() {
       setLoading(false);
       setCameraKey((prev) => prev + 1);
       
-      // Request camera permission only if not yet decided (not granted and not denied)
-      // The permission hook caches the result, so we only ask once
-      if (!isWeb && permission && permission.status !== 'granted' && permission.status !== 'denied') {
-        requestPermission();
-      }
-      
-      // Restart web scanning if needed
-      if (isWeb && !webScannerRunningRef.current) {
-        startBarcodeScanning();
+      if (!isWeb && permission) {
+        if (permission.granted) {
+          setNativeCameraState('ready');
+          setNativeCameraError(null);
+        } else if (permission.canAskAgain) {
+          setNativeCameraState('permission-needed');
+        } else {
+          setNativeCameraState('unavailable');
+          setNativeCameraError('Camera access is disabled for HealthFull. Enable it in your phone Settings, then return here.');
+        }
       }
       
       return () => {
@@ -146,6 +144,21 @@ export default function ScanScreen() {
       };
     }, [isWeb, permission, requestPermission])
   );
+
+  const requestNativeCameraPermission = async () => {
+    setNativeCameraState('loading');
+    const result = await requestPermission();
+    if (result.granted) {
+      setNativeCameraState('ready');
+      setNativeCameraError(null);
+      setCameraKey((previous) => previous + 1);
+      return;
+    }
+    setNativeCameraState(result.canAskAgain ? 'permission-needed' : 'unavailable');
+    setNativeCameraError(result.canAskAgain
+      ? 'Camera access is required to scan barcodes.'
+      : 'Camera access is disabled for HealthFull. Enable it in your phone Settings, then return here.');
+  };
 
   // Utility to ensure nutrition data has valid defaults
   const ensureNutritionDefaults = (nutrients: Partial<NutrientData>): NutrientData => {
@@ -360,10 +373,9 @@ export default function ScanScreen() {
         await feedback.alert('Camera Access Denied', 'Please enable camera access in your browser settings to scan barcodes.');
         return;
       }
-      // Start scanning for barcodes (web)
-      startBarcodeScanning();
+      setWebCameraError(null);
     } catch (error) {
-      await feedback.alert('Camera Error', 'Could not access camera. Please check permissions in your browser settings.');
+      setWebCameraError('Camera access is unavailable in this browser. You can still add food manually.');
     }
   };
 
@@ -372,6 +384,12 @@ export default function ScanScreen() {
 
     const startWebScanner = async () => {
       try {
+        if (!window.isSecureContext) {
+          setWebCameraError('Camera scanning requires HTTPS on a phone browser. Use Manual Entry here, or open the app through Expo Go.');
+          return;
+        }
+
+        setWebCameraError(null);
         const module = await import('@zxing/library');
         const { BrowserMultiFormatReader, BarcodeFormat, DecodeHintType } = module as typeof import('@zxing/library');
 
@@ -419,6 +437,7 @@ export default function ScanScreen() {
       } catch (err) {
         webScannerRunningRef.current = false;
         setWebScannerActive(false);
+        setWebCameraError('Camera access was blocked. Allow camera access in your browser settings, then try again.');
       }
     };
 
@@ -444,25 +463,37 @@ export default function ScanScreen() {
     }
   };
 
-  if (!permission) {
+  if (!isWeb && !permission) {
     return <View style={styles.container}><Text>Loading...</Text></View>;
   }
 
-  if (!permission.granted) {
+  if (!isWeb && nativeCameraState !== 'ready') {
     return (
       <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', padding: 20 }]}>
         <Text style={[styles.message, { marginBottom: 20, textAlign: 'center', fontSize: 16, fontWeight: '600' }]}>
-          📷 Camera Permission Required
+          {nativeCameraState === 'loading' ? 'Preparing camera...' : 'Camera access needed'}
         </Text>
         <Text style={[styles.message, { marginBottom: 30, textAlign: 'center', fontSize: 14, opacity: 0.7 }]}>
-          HealthFull needs camera access to scan product barcodes and look up nutrition information.
+          {nativeCameraError ?? 'HealthFull needs camera access to scan product barcodes and look up nutrition information.'}
         </Text>
-        <Pressable style={[styles.button, { backgroundColor: '#FF3B30', paddingVertical: 14, width: '100%' }]} onPress={requestPermission}>
-          <Text style={[styles.buttonText, { fontSize: 16, fontWeight: 'bold' }]}>✓ Grant Camera Access</Text>
+        {nativeCameraState !== 'unavailable' && (
+          <Pressable style={[styles.button, { backgroundColor: '#FF3B30', paddingVertical: 14, width: '100%', marginBottom: 12 }]} onPress={requestNativeCameraPermission}>
+            <Text style={[styles.buttonText, { fontSize: 16, fontWeight: 'bold' }]}>Enable Camera</Text>
+          </Pressable>
+        )}
+        <Pressable style={[styles.button, { paddingVertical: 14, width: '100%' }]} onPress={() => setShowManualEntry(true)}>
+          <Text style={[styles.buttonText, { fontSize: 16, fontWeight: 'bold' }]}>Add Food Manually</Text>
         </Pressable>
-        <Text style={[styles.message, { marginTop: 20, textAlign: 'center', fontSize: 12, opacity: 0.6 }]}>
-          You can change this later in Settings
-        </Text>
+        <ManualEntryModal
+          visible={showManualEntry}
+          onCancel={() => setShowManualEntry(false)}
+          onAdd={async (entry) => {
+            const entries = (await storage.get<any[]>(STORAGE_KEYS.FOOD_ENTRIES, [])) ?? [];
+            await storage.set(STORAGE_KEYS.FOOD_ENTRIES, [...entries, entry]);
+            setShowManualEntry(false);
+            router.back();
+          }}
+        />
       </View>
     );
   }
@@ -735,11 +766,23 @@ export default function ScanScreen() {
             </Text>
             {loading && <Text style={[styles.loadingText, { fontSize: 14 }]}>Finding nutrition info...</Text>}
             {!webScannerActive && !loading && (
-              <Pressable
-                style={[styles.footerButton, styles.footerPrimaryButton, { marginTop: 8, marginBottom: 4 }]}
-                onPress={() => startBarcodeScanning()}>
-                <Text style={styles.footerButtonText}>▶ Start Camera</Text>
-              </Pressable>
+              <>
+                {webCameraError && (
+                  <Text style={[styles.loadingText, { textAlign: 'center', marginBottom: 12 }]}>
+                    {webCameraError}
+                  </Text>
+                )}
+                <Pressable
+                  style={[styles.footerButton, styles.footerPrimaryButton, { marginTop: 8, marginBottom: 10 }]}
+                  onPress={startBarcodeScanning}>
+                  <Text style={styles.footerButtonText}>▶ Start Camera</Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.footerButton, { marginBottom: 4 }]}
+                  onPress={() => setShowManualEntry(true)}>
+                  <Text style={styles.footerButtonText}>✏️ Add Food Manually</Text>
+                </Pressable>
+              </>
             )}
             
             
@@ -755,6 +798,14 @@ export default function ScanScreen() {
               barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e'],
             }}
             onBarcodeScanned={!scanned ? handleBarCodeScanned : undefined}
+            onCameraReady={() => {
+              setNativeCameraState('ready');
+              setNativeCameraError(null);
+            }}
+            onMountError={(event) => {
+              setNativeCameraState('error');
+              setNativeCameraError(event.message || 'The camera could not be started on this device.');
+            }}
           />
           <View style={styles.overlayContainer}>
             {/* Top dark overlay */}

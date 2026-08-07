@@ -60,9 +60,9 @@ export default function TabLayout() {
         <Tabs.Screen
           name="explore"
           options={{
-            title: 'Exercise',
-            tabBarLabel: isLargeDevice ? 'Exercise' : '',
-            tabBarIcon: ({ color }) => <IconSymbol size={30} name="figure.run" color={color} />,
+            title: 'Measurements',
+            tabBarLabel: isLargeDevice ? 'Measurements' : '',
+            tabBarIcon: ({ color }) => <IconSymbol size={30} name="ruler" color={color} />,
           }}
         />
         <Tabs.Screen
