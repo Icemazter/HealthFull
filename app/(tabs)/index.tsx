@@ -277,7 +277,7 @@ export default function HomeScreen() {
       <ThemedView style={[styles.header, isDark && styles.headerDark, { paddingTop: Math.max(insets.top, 16) }]}>
         <ThemedText type="title" style={[styles.headerTitle, isDark && styles.headerTitleDark]}>Today's Nutrition</ThemedText>
         <Pressable style={styles.themeToggle} onPress={toggleTheme}>
-          <Text style={styles.themeToggleIcon}>{isDark ? '🌙' : '☀️'}</Text>
+          <Text style={styles.themeToggleIcon}>{isDark ? 'Dark' : 'Light'}</Text>
         </Pressable>
       </ThemedView>
 
@@ -333,7 +333,7 @@ export default function HomeScreen() {
       {/* Favorites Section */}
       {foodManager.favorites.length > 0 && (
         <ThemedView style={[styles.favoritesSection, isDark && styles.favoritesSectionDark]}>
-          <Text style={[styles.favoritesTitle, isDark && styles.favoritesTitleDark]}>⭐ Quick Add</Text>
+          <Text style={[styles.favoritesTitle, isDark && styles.favoritesTitleDark]}>Quick Add</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.favoritesScroll}>
             {foodManager.favorites.map((fav) => (
               <Pressable

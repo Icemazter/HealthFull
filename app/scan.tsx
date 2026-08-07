@@ -876,11 +876,11 @@ export default function ScanScreen() {
                 <Text style={styles.closeButtonText}>✕</Text>
               </Pressable>
               <View style={styles.headerContent}>
-                <Text style={styles.modalTitle}>🎉 Product Found</Text>
+                <Text style={styles.modalTitle}>Product Found</Text>
                 <Text style={styles.productName}>{foodData?.name}</Text>
                 {foodData && foodData.nutrients.protein > 15 && (
                   <View style={styles.achievementBadge}>
-                    <Text style={styles.achievementBadgeText}>💪 High Protein</Text>
+                    <Text style={styles.achievementBadgeText}>High Protein</Text>
                   </View>
                 )}
               </View>
@@ -916,7 +916,7 @@ export default function ScanScreen() {
                   {imageLoaded && (
                     <>
                       <View style={styles.imagePinIcon}>
-                        <Text style={styles.imagePinText}>📌</Text>
+                        <Text style={styles.imagePinText}>Details</Text>
                       </View>
                       <Text style={styles.tapToEnlarge}>Tap to enlarge</Text>
                     </>
@@ -926,7 +926,7 @@ export default function ScanScreen() {
             )}
             
             <View style={styles.nutritionBox}>
-              <Text style={styles.nutritionTitle}>📊 Nutrition per 100{foodData?.unit === 'ml' ? 'ml' : 'g'}</Text>
+              <Text style={styles.nutritionTitle}>Nutrition per 100{foodData?.unit === 'ml' ? 'ml' : 'g'}</Text>
               <Text style={styles.nutritionCalories}>
                 {Math.round(foodData?.nutrients.calories || 0)} kcal
               </Text>
@@ -974,7 +974,7 @@ export default function ScanScreen() {
 
             {isRecipeMode ? (
               <View style={styles.amountSection}>
-                <Text style={styles.quantityLabel}>🔢 Total Amount Added</Text>
+                <Text style={styles.quantityLabel}>Total Amount Added</Text>
                 <View style={styles.unitSelector}>
                   {['g', 'ml', 'dl', 'tbsp', 'tsp'].map((unit) => (
                     <Pressable
@@ -1053,7 +1053,7 @@ export default function ScanScreen() {
                 <View style={styles.dividerLine} />
 
                 <View style={styles.amountSection}>
-                  <Text style={styles.quantityLabel}>🔢 Total Amount Consumed</Text>
+                  <Text style={styles.quantityLabel}>Total Amount Consumed</Text>
                   <View style={styles.quantityInputRow}>
                     <TextInput
                       style={styles.quantityInput}

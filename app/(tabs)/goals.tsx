@@ -218,19 +218,19 @@ export default function GoalsScreen() {
     await setGoals(newGoals);
     
     const message = 
-      `📊 Calculations:\n` +
+      `Calculations:\n` +
       `BMR: ${Math.round(bmr)} kcal\n` +
       `TDEE: ${Math.round(tdee)} kcal\n` +
       `Goal: ${stats.goal}\n\n` +
-      `✅ Applied Goals:\n` +
-      `🔥 Calories: ${Math.round(calories)} kcal\n` +
-      `🥩 Protein: ${protein}g (${proteinPerKg}g/kg)\n` +
-      `🍞 Carbs: ${carbs}g\n` +
-      `🥑 Fat: ${fatGrams}g (${fatMethod === 'weight' ? 'by weight' : 'by calories'})\n` +
-      `🥦 Fiber: ${fiber}g (~14g/1000 kcal)\n\n` +
+      `Applied goals:\n` +
+      `Calories: ${Math.round(calories)} kcal\n` +
+      `Protein: ${protein}g (${proteinPerKg}g/kg)\n` +
+      `Carbs: ${carbs}g\n` +
+      `Fat: ${fatGrams}g (${fatMethod === 'weight' ? 'by weight' : 'by calories'})\n` +
+      `Fiber: ${fiber}g (~14g/1000 kcal)\n\n` +
       `Goals automatically saved to nutrition tracker!`;
     
-    await feedback.success(message, '🎯 Goals Applied & Saved');
+    await feedback.success(message, 'Goals Applied and Saved');
   };
 
   const saveGoals = async () => {
@@ -536,7 +536,7 @@ export default function GoalsScreen() {
               <View style={styles.diabetesContent}>
                 {/* Blood Glucose Tracking */}
                 <View style={[styles.diabetesSection, isDark && styles.diabetesSectionDark]}>
-                  <Text style={[styles.diabetesSectionTitle, isDark && styles.diabetesSectionTitleDark]}>🩸 Blood Glucose (mg/dL)</Text>
+                  <Text style={[styles.diabetesSectionTitle, isDark && styles.diabetesSectionTitleDark]}>Blood Glucose (mg/dL)</Text>
                   
                   <View style={styles.chipGroup}>
                     <Text style={[styles.label, isDark && styles.labelDark]}>Context</Text>
@@ -588,7 +588,7 @@ export default function GoalsScreen() {
 
                 {/* Insulin Tracking */}
                 <View style={[styles.diabetesSection, isDark && styles.diabetesSectionDark]}>
-                  <Text style={[styles.diabetesSectionTitle, isDark && styles.diabetesSectionTitleDark]}>💉 Insulin Dose</Text>
+                  <Text style={[styles.diabetesSectionTitle, isDark && styles.diabetesSectionTitleDark]}>Insulin Dose</Text>
                   
                   <View style={styles.chipGroup}>
                     <Text style={[styles.label, isDark && styles.labelDark]}>Type</Text>
@@ -647,7 +647,7 @@ export default function GoalsScreen() {
                 </View>
 
                 <Text style={[styles.diabetesNote, isDark && styles.diabetesNoteDark]}>
-                  💡 Tip: Carbs are displayed prominently in food logs when diabetes mode is on. Track your glucose and insulin alongside meals for better management.
+                  Tip: Carbs are displayed prominently in food logs when diabetes mode is on. Track your glucose and insulin alongside meals for better management.
                 </Text>
               </View>
             )}

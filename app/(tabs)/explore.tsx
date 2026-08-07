@@ -2,7 +2,7 @@ import { Palette } from '@/constants/theme';
 import { useHistoryManager } from '@/hooks/use-persisted-state';
 import { useAppTheme } from '@/hooks/use-theme';
 import { feedback, validate } from '@/utils/feedback';
-import { storage, STORAGE_KEYS } from '@/utils/storage';
+import { STORAGE_KEYS } from '@/utils/storage';
 import React, { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -42,9 +42,11 @@ export default function MeasurementsScreen() {
   const [sleepHours, setSleepHours] = useState('');
   const [hunger, setHunger] = useState<DailyContext['hunger']>('Moderate');
   const [stress, setStress] = useState<DailyContext['stress']>('Moderate');
+  const [digestion, setDigestion] = useState<NonNullable<DailyContext['digestion']>>('Comfortable');
   const [note, setNote] = useState('');
   const weightManager = useHistoryManager<WeightEntry>(STORAGE_KEYS.WEIGHT_HISTORY);
   const measurementManager = useHistoryManager<BodyMeasurement>(STORAGE_KEYS.BODY_MEASUREMENTS);
+  const contextManager = useHistoryManager<DailyContext>(STORAGE_KEYS.DAILY_CONTEXT);
 
   const logWeight = async () => {
     if (!validate.number(weight).valid) {
@@ -81,9 +83,10 @@ export default function MeasurementsScreen() {
       sleepHours: sleepHours || undefined,
       hunger,
       stress,
+      digestion,
       note: note.trim() || undefined,
     };
-    await storage.set(STORAGE_KEYS.DAILY_CONTEXT, context);
+    await contextManager.add(context);
     setNote('');
     await feedback.success('Daily context saved.');
   };
@@ -99,7 +102,7 @@ export default function MeasurementsScreen() {
         </Pressable>
       </View>
 
-      <View style={[styles.card, isDark && styles.cardDark]}>
+      <View style={[styles.contextSection, isDark && styles.contextSectionDark]}>
         <Text style={[styles.cardTitle, isDark && styles.textDark]}>Body Weight</Text>
         <Text style={[styles.description, isDark && styles.mutedDark]}>Log a consistent weigh-in to follow your trend over time.</Text>
         <View style={styles.inputRow}>
@@ -142,6 +145,14 @@ export default function MeasurementsScreen() {
             {(['Low', 'Moderate', 'High'] as const).map((value) => (
               <Pressable key={value} style={[styles.chip, isDark && styles.chipDark, stress === value && styles.chipActive]} onPress={() => setStress(value)}>
                 <Text style={[styles.chipText, isDark && styles.textDark, stress === value && styles.chipTextActive]}>{value}</Text>
+              </Pressable>
+            ))}
+          </View>
+          <Text style={[styles.label, styles.contextLabel, isDark && styles.mutedDark]}>Digestion</Text>
+          <View style={styles.typeRow}>
+            {(['Comfortable', 'Mixed', 'Uncomfortable'] as const).map((value) => (
+              <Pressable key={value} style={[styles.chip, isDark && styles.chipDark, digestion === value && styles.chipActive]} onPress={() => setDigestion(value)}>
+                <Text style={[styles.chipText, isDark && styles.textDark, digestion === value && styles.chipTextActive]}>{value}</Text>
               </Pressable>
             ))}
           </View>
@@ -219,6 +230,8 @@ const styles = StyleSheet.create({
   content: { paddingBottom: 32 },
   card: { marginHorizontal: 16, marginTop: 20, padding: 24, borderRadius: 16, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0' },
   cardDark: { backgroundColor: '#1a1a1a', borderColor: '#333' },
+  contextSection: { marginTop: 20, paddingTop: 20, borderTopWidth: 1, borderTopColor: '#e2e8f0' },
+  contextSectionDark: { borderTopColor: '#333' },
   cardTitle: { fontSize: 20, fontWeight: '700', color: '#111827' },
   description: { marginTop: 8, marginBottom: 20, color: '#64748b', lineHeight: 20 },
   label: { fontSize: 14, fontWeight: '600', color: '#64748b', marginBottom: 8 },
