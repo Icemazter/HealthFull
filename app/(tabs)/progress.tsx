@@ -168,7 +168,7 @@ function ValueTable({ points, unit, isDark, selectedTimestamp, onSelect, showTre
 
 export default function ProgressScreen() {
   const insets = useSafeAreaInsets();
-  const { isDark, toggleTheme, colorScheme } = useAppTheme();
+  const { isDark } = useAppTheme();
   const [range, setRange] = useState<RangeDays>(90);
   const [measurementType, setMeasurementType] = useState('Waist');
   const [data, setData] = useState<ProgressData>(defaultData);
@@ -245,9 +245,6 @@ export default function ProgressScreen() {
     <ScrollView style={[styles.container, isDark && styles.containerDark]} contentContainerStyle={styles.content}>
       <View style={[styles.header, isDark && styles.headerDark, { paddingTop: Math.max(insets.top, 16) }]}>
         <Text style={[styles.headerTitle, isDark && styles.textDark]}>Progress</Text>
-        <Pressable style={styles.themeToggle} onPress={toggleTheme}>
-          <Text style={styles.themeToggleIcon}>{colorScheme === 'dark' ? 'Dark' : colorScheme === 'light' ? 'Light' : 'Auto'}</Text>
-        </Pressable>
       </View>
 
       <View style={styles.rangeRow}>

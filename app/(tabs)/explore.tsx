@@ -48,7 +48,7 @@ const measurementTypes: MeasurementType[] = ['Waist', 'Hips', 'Chest', 'Arm', 'T
 
 export default function MeasurementsScreen() {
   const insets = useSafeAreaInsets();
-  const { isDark, colorScheme, toggleTheme } = useAppTheme();
+  const { isDark } = useAppTheme();
   const [weight, setWeight] = useState('');
   const [measurement, setMeasurement] = useState('');
   const [type, setType] = useState<MeasurementType>('Waist');
@@ -123,9 +123,6 @@ export default function MeasurementsScreen() {
       contentContainerStyle={styles.content}>
       <View style={[styles.header, isDark && styles.headerDark, { paddingTop: Math.max(insets.top, 16) }]}>
         <Text style={[styles.headerTitle, isDark && styles.textDark]}>Measurements</Text>
-        <Pressable style={styles.themeToggle} onPress={toggleTheme}>
-          <Text style={styles.themeToggleIcon}>{colorScheme === 'dark' ? 'Dark' : colorScheme === 'light' ? 'Light' : 'Auto'}</Text>
-        </Pressable>
       </View>
 
       <View style={[styles.card, isDark && styles.cardDark]}>

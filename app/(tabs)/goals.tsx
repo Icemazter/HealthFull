@@ -3,7 +3,7 @@ import { useHistoryManager, usePersistedState } from '@/hooks/use-persisted-stat
 import { feedback, validate } from '@/utils/feedback';
 import { storage, STORAGE_KEYS } from '@/utils/storage';
 import React, { useEffect, useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useColorScheme, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface Goals {
@@ -43,9 +43,7 @@ interface BodyStats {
 
 export default function GoalsScreen() {
   const insets = useSafeAreaInsets();
-  const systemColorScheme = useColorScheme();
-  const [colorScheme, setColorScheme] = usePersistedState<'light' | 'dark' | null>(STORAGE_KEYS.DARK_MODE, null);
-  const isDark = colorScheme === 'dark' || (colorScheme === null && systemColorScheme === 'dark');
+  const isDark = true;
   
   const [goals, setGoals] = usePersistedState<Goals>(
     STORAGE_KEYS.MACRO_GOALS,
