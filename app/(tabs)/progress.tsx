@@ -48,6 +48,60 @@ interface ProgressGoal {
 
 const defaultData: ProgressData = { foods: [], weights: [], measurements: [], contexts: [], goals: {}, heightCm: 0 };
 
+const createDemoAnalyticsData = (): { data: ProgressData; goal: ProgressGoal } => {
+  const day = 24 * 60 * 60 * 1000;
+  const today = new Date();
+  today.setHours(9, 0, 0, 0);
+  const foods: NutritionEntry[] = [];
+  const weights: WeightEntry[] = [];
+  const measurements: MeasurementEntry[] = [];
+  const contexts: DailyContextEntry[] = [];
+
+  for (let index = 41; index >= 0; index -= 1) {
+    const timestamp = today.getTime() - index * day;
+    const variation = ((index * 7) % 9) - 4;
+    foods.push({
+      timestamp,
+      calories: 2240 + variation * 28,
+      protein: 164 + variation,
+      carbs: 230 + variation * 3,
+      fat: 73 - variation,
+      fiber: 31 + (index % 4),
+    });
+    weights.push({ timestamp, weight: Number((86.2 - (41 - index) * 0.065 + variation * 0.04).toFixed(1)) });
+    contexts.push({
+      timestamp,
+      sleepHours: Number((7.2 + ((index % 5) - 2) * 0.25).toFixed(1)),
+      hunger: index % 8 === 0 ? 'High' : index % 3 === 0 ? 'Low' : 'Moderate',
+      stress: index % 9 === 0 ? 'High' : index % 4 === 0 ? 'Low' : 'Moderate',
+      digestion: index % 10 === 0 ? 'Uncomfortable' : index % 4 === 0 ? 'Mixed' : 'Comfortable',
+    });
+    if (index % 7 === 0) {
+      const week = (41 - index) / 7;
+      measurements.push(
+        { timestamp, type: 'Waist', value: Number((88.5 - week * 0.45).toFixed(1)) },
+        { timestamp, type: 'Chest', value: Number((103.5 - week * 0.1).toFixed(1)) },
+        { timestamp, type: 'Hip', value: Number((101.2 - week * 0.25).toFixed(1)) }
+      );
+    }
+  }
+
+  const targetDate = new Date(today.getTime() + 45 * day);
+  return {
+    data: {
+      foods,
+      weights,
+      measurements,
+      contexts,
+      goals: { calories: 2250, protein: 165, carbs: 230, fat: 75, fiber: 30 },
+      heightCm: 178,
+    },
+    goal: { targetWeight: '80', targetDate: targetDate.toISOString().slice(0, 10) },
+  };
+};
+
+const demoAnalytics = createDemoAnalyticsData();
+
 const filterRange = <T extends { timestamp: number }>(entries: T[], range: RangeDays) => {
   const threshold = Date.now() - range * 24 * 60 * 60 * 1000;
   return entries.filter((entry) => entry.timestamp >= threshold);
@@ -123,6 +177,7 @@ export default function ProgressScreen() {
   const [weightDisplayMode, setWeightDisplayMode] = useState<AnalyticsDisplayMode>('chart');
   const [measurementDisplayMode, setMeasurementDisplayMode] = useState<AnalyticsDisplayMode>('chart');
   const [macroDisplayMode, setMacroDisplayMode] = useState<AnalyticsDisplayMode>('chart');
+  const [isUsingDemoData, setIsUsingDemoData] = useState(false);
   const [progressGoal, setProgressGoal] = usePersistedState<ProgressGoal>(STORAGE_KEYS.PROGRESS_GOAL, { targetWeight: '', targetDate: '' });
 
   const loadProgress = useCallback(async () => {
@@ -148,32 +203,34 @@ export default function ProgressScreen() {
     loadProgress();
   }, [loadProgress]));
 
-  const rangedWeights = useMemo(() => filterRange(data.weights, range), [data.weights, range]);
+  const activeData = isUsingDemoData ? demoAnalytics.data : data;
+  const activeGoal = isUsingDemoData ? demoAnalytics.goal : progressGoal;
+  const rangedWeights = useMemo(() => filterRange(activeData.weights, range), [activeData.weights, range]);
   const weightTrend = useMemo(() => buildWeightTrend(rangedWeights).slice(-20), [rangedWeights]);
   const projection = useMemo(() => forecastWeight(rangedWeights), [rangedWeights]);
-  const macro = useMemo(() => calculateMacroAdherence(filterRange(data.foods, range), data.goals as any), [data.foods, data.goals, range]);
-  const adaptiveGuidance = useMemo(() => estimateAdaptiveGuidance(data.foods, data.weights, data.goals as any), [data.foods, data.goals, data.weights]);
-  const types = useMemo(() => [...new Set(data.measurements.map((entry) => entry.type))], [data.measurements]);
+  const macro = useMemo(() => calculateMacroAdherence(filterRange(activeData.foods, range), activeData.goals as any), [activeData.foods, activeData.goals, range]);
+  const adaptiveGuidance = useMemo(() => estimateAdaptiveGuidance(activeData.foods, activeData.weights, activeData.goals as any), [activeData.foods, activeData.goals, activeData.weights]);
+  const types = useMemo(() => [...new Set(activeData.measurements.map((entry) => entry.type))], [activeData.measurements]);
   const selectedMeasurements = useMemo(
-    () => filterRange(data.measurements.filter((entry) => entry.type === measurementType), range)
+    () => filterRange(activeData.measurements.filter((entry) => entry.type === measurementType), range)
       .map((entry) => ({ ...entry, value: Number(entry.value) }))
       .filter((entry) => Number.isFinite(entry.value)),
-    [data.measurements, measurementType, range]
+    [activeData.measurements, measurementType, range]
   );
-  const waist = latestMeasurementByType(data.measurements, 'Waist');
-  const waistToHeight = waist ? calculateWaistToHeight(Number(waist.value), data.heightCm) : null;
+  const waist = latestMeasurementByType(activeData.measurements, 'Waist');
+  const waistToHeight = waist ? calculateWaistToHeight(Number(waist.value), activeData.heightCm) : null;
   const dataQuality = useMemo(
-    () => calculateDataQuality(filterRange(data.foods, range), rangedWeights, filterRange(data.measurements, range), range),
-    [data.foods, data.measurements, rangedWeights, range]
+    () => calculateDataQuality(filterRange(activeData.foods, range), rangedWeights, filterRange(activeData.measurements, range), range),
+    [activeData.foods, activeData.measurements, rangedWeights, range]
   );
-  const targetWeight = Number(progressGoal.targetWeight);
-  const targetDate = new Date(progressGoal.targetDate);
+  const targetWeight = Number(activeGoal.targetWeight);
+  const targetDate = new Date(activeGoal.targetDate);
   const goalDaysAway = !Number.isNaN(targetDate.getTime()) ? Math.ceil((targetDate.getTime() - Date.now()) / (24 * 60 * 60 * 1000)) : 0;
-  const goalProjection = targetWeight > 0 && goalDaysAway > 0 ? forecastWeight(data.weights, goalDaysAway) : null;
-  const goalPace = targetWeight > 0 && goalDaysAway > 0 ? calculateGoalPace(data.weights, targetWeight, targetDate) : null;
-  const periodComparison = useMemo(() => compareNutritionPeriods(data.foods, range), [data.foods, range]);
+  const goalProjection = targetWeight > 0 && goalDaysAway > 0 ? forecastWeight(activeData.weights, goalDaysAway) : null;
+  const goalPace = targetWeight > 0 && goalDaysAway > 0 ? calculateGoalPace(activeData.weights, targetWeight, targetDate) : null;
+  const periodComparison = useMemo(() => compareNutritionPeriods(activeData.foods, range), [activeData.foods, range]);
   const measurementChange = useMemo(() => calculateMeasurementChange(selectedMeasurements, measurementType), [selectedMeasurements, measurementType]);
-  const contextSummary = useMemo(() => summarizeDailyContext(filterRange(data.contexts, range)), [data.contexts, range]);
+  const contextSummary = useMemo(() => summarizeDailyContext(filterRange(activeData.contexts, range)), [activeData.contexts, range]);
   const selectedWeight = weightTrend.find((point) => point.timestamp === selectedWeightTimestamp);
   const selectedMeasurement = selectedMeasurements.find((point) => point.timestamp === selectedMeasurementTimestamp);
 
@@ -199,6 +256,21 @@ export default function ProgressScreen() {
             <Text style={[styles.rangeText, isDark && styles.textDark, range === days && styles.rangeTextActive]}>{days} days</Text>
           </Pressable>
         ))}
+      </View>
+
+      <View style={[styles.demoCard, isDark && styles.demoCardDark]}>
+        <View style={styles.demoCopy}>
+          <Text style={[styles.demoTitle, isDark && styles.textDark]}>{isUsingDemoData ? 'Demo analytics active' : 'Try the analytics'}</Text>
+          <Text style={[styles.demoDescription, isDark && styles.mutedDark]}>
+            {isUsingDemoData ? 'Showing 42 days of simulated local data. Your saved logs have not changed.' : 'Load a simulated 42-day dataset to explore charts, values, forecasts, and comparisons.'}
+          </Text>
+        </View>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => setIsUsingDemoData((current) => !current)}
+          style={[styles.demoButton, isUsingDemoData && styles.demoButtonActive]}>
+          <Text style={styles.demoButtonText}>{isUsingDemoData ? 'Use my data' : 'Load demo'}</Text>
+        </Pressable>
       </View>
 
       <View style={styles.grid}>
@@ -261,8 +333,9 @@ export default function ProgressScreen() {
             <Text style={[styles.goalLabel, isDark && styles.mutedDark]}>Target weight (kg)</Text>
             <TextInput
               style={[styles.goalInput, isDark && styles.goalInputDark]}
-              value={progressGoal.targetWeight}
+              value={activeGoal.targetWeight}
               onChangeText={(nextWeight) => setProgressGoal({ ...progressGoal, targetWeight: nextWeight })}
+              editable={!isUsingDemoData}
               keyboardType="decimal-pad"
               placeholder="70"
               placeholderTextColor={isDark ? '#666' : '#999'}
@@ -272,8 +345,9 @@ export default function ProgressScreen() {
             <Text style={[styles.goalLabel, isDark && styles.mutedDark]}>Target date</Text>
             <TextInput
               style={[styles.goalInput, isDark && styles.goalInputDark]}
-              value={progressGoal.targetDate}
+              value={activeGoal.targetDate}
               onChangeText={(nextDate) => setProgressGoal({ ...progressGoal, targetDate: nextDate })}
+              editable={!isUsingDemoData}
               placeholder="YYYY-MM-DD"
               placeholderTextColor={isDark ? '#666' : '#999'}
             />
@@ -313,7 +387,7 @@ export default function ProgressScreen() {
           (['calories', 'protein', 'carbs', 'fat', 'fiber'] as const).map((key) => (
             <View key={key} style={styles.valueRow}>
               <Text style={[styles.macroName, isDark && styles.textDark]}>{key[0].toUpperCase() + key.slice(1)}</Text>
-              <Text style={[styles.valueRowText, isDark && styles.textDark]}>{Math.round(macro.average[key])} / {Number(data.goals[key]) || 0} {key === 'calories' ? 'kcal' : 'g'}</Text>
+              <Text style={[styles.valueRowText, isDark && styles.textDark]}>{Math.round(macro.average[key])} / {Number(activeData.goals[key]) || 0} {key === 'calories' ? 'kcal' : 'g'}</Text>
               <Text style={[styles.macroPercent, isDark && styles.mutedDark]}>{macro.adherence[key]}%</Text>
             </View>
           ))
@@ -463,6 +537,14 @@ const styles = StyleSheet.create({
   rangeButtonActive: { backgroundColor: Palette.primary },
   rangeText: { fontWeight: '600', color: '#334155' },
   rangeTextActive: { color: '#fff' },
+  demoCard: { flexDirection: 'row', alignItems: 'center', gap: 12, marginHorizontal: 16, marginTop: 12, padding: 14, borderRadius: 12, backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe' },
+  demoCardDark: { backgroundColor: '#172554', borderColor: '#1d4ed8' },
+  demoCopy: { flex: 1 },
+  demoTitle: { color: '#1e3a8a', fontSize: 14, fontWeight: '700' },
+  demoDescription: { marginTop: 3, color: '#475569', fontSize: 12, lineHeight: 17 },
+  demoButton: { paddingVertical: 9, paddingHorizontal: 11, borderRadius: 8, backgroundColor: Palette.primary },
+  demoButtonActive: { backgroundColor: '#475569' },
+  demoButtonText: { color: '#fff', fontSize: 12, fontWeight: '700' },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, margin: 16 },
   statCard: { width: '47%', padding: 16, borderRadius: 14, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0' },
   card: { marginHorizontal: 16, marginBottom: 16, padding: 20, borderRadius: 16, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0' },
