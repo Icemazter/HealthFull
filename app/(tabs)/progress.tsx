@@ -2,6 +2,7 @@ import { TrendChart } from '@/components/ui/trend-chart';
 import { Palette } from '@/constants/theme';
 import {
   buildWeightTrend,
+  calculateDataQuality,
   calculateMacroAdherence,
   calculateWaistToHeight,
   estimateAdaptiveGuidance,
@@ -12,9 +13,10 @@ import {
   type WeightEntry,
 } from '@/utils/health-analytics';
 import { storage, STORAGE_KEYS } from '@/utils/storage';
+import { usePersistedState } from '@/hooks/use-persisted-state';
 import { useFocusEffect } from '@react-navigation/native';
 import React, { useCallback, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '@/hooks/use-theme';
 
@@ -32,6 +34,11 @@ interface ProgressData {
   heightCm: number;
 }
 
+interface ProgressGoal {
+  targetWeight: string;
+  targetDate: string;
+}
+
 const defaultData: ProgressData = { foods: [], weights: [], measurements: [], goals: {}, heightCm: 0 };
 
 const filterRange = <T extends { timestamp: number }>(entries: T[], range: RangeDays) => {
@@ -45,6 +52,7 @@ export default function ProgressScreen() {
   const [range, setRange] = useState<RangeDays>(90);
   const [measurementType, setMeasurementType] = useState('Waist');
   const [data, setData] = useState<ProgressData>(defaultData);
+  const [progressGoal, setProgressGoal] = usePersistedState<ProgressGoal>(STORAGE_KEYS.PROGRESS_GOAL, { targetWeight: '', targetDate: '' });
 
   const loadProgress = useCallback(async () => {
     const [foods, weights, measurements, goals, bodyStats] = await Promise.all([
@@ -81,6 +89,14 @@ export default function ProgressScreen() {
   );
   const waist = latestMeasurementByType(data.measurements, 'Waist');
   const waistToHeight = waist ? calculateWaistToHeight(Number(waist.value), data.heightCm) : null;
+  const dataQuality = useMemo(
+    () => calculateDataQuality(filterRange(data.foods, range), rangedWeights, filterRange(data.measurements, range), range),
+    [data.foods, data.measurements, rangedWeights, range]
+  );
+  const targetWeight = Number(progressGoal.targetWeight);
+  const targetDate = new Date(progressGoal.targetDate);
+  const goalDaysAway = !Number.isNaN(targetDate.getTime()) ? Math.ceil((targetDate.getTime() - Date.now()) / (24 * 60 * 60 * 1000)) : 0;
+  const goalProjection = targetWeight > 0 && goalDaysAway > 0 ? forecastWeight(data.weights, goalDaysAway) : null;
 
   const statCards = [
     { value: macro.loggedDays, label: 'Days Logged' },
@@ -126,8 +142,44 @@ export default function ProgressScreen() {
               Based on {projection.sampleSize} recent weigh-ins, your estimated weight in 28 days is {projection.projectedWeight.toFixed(1)} kg (range {projection.lowerBound.toFixed(1)}–{projection.upperBound.toFixed(1)} kg).
             </Text>
           </View>
+
         ) : (
           <Text style={[styles.helpText, isDark && styles.mutedDark]}>Log at least 7 weigh-ins to unlock a conservative 28-day projection.</Text>
+        )}
+      </View>
+
+      <View style={[styles.card, isDark && styles.cardDark]}>
+        <Text style={[styles.cardTitle, isDark && styles.textDark]}>Weight goal</Text>
+        <Text style={[styles.description, isDark && styles.mutedDark]}>Set a target to compare it with your current trend. Estimates are informational, not medical advice.</Text>
+        <View style={styles.goalInputRow}>
+          <View style={styles.goalInputGroup}>
+            <Text style={[styles.goalLabel, isDark && styles.mutedDark]}>Target weight (kg)</Text>
+            <TextInput
+              style={[styles.goalInput, isDark && styles.goalInputDark]}
+              value={progressGoal.targetWeight}
+              onChangeText={(nextWeight) => setProgressGoal({ ...progressGoal, targetWeight: nextWeight })}
+              keyboardType="decimal-pad"
+              placeholder="70"
+              placeholderTextColor={isDark ? '#666' : '#999'}
+            />
+          </View>
+          <View style={styles.goalInputGroup}>
+            <Text style={[styles.goalLabel, isDark && styles.mutedDark]}>Target date</Text>
+            <TextInput
+              style={[styles.goalInput, isDark && styles.goalInputDark]}
+              value={progressGoal.targetDate}
+              onChangeText={(nextDate) => setProgressGoal({ ...progressGoal, targetDate: nextDate })}
+              placeholder="YYYY-MM-DD"
+              placeholderTextColor={isDark ? '#666' : '#999'}
+            />
+          </View>
+        </View>
+        {goalProjection ? (
+          <Text style={[styles.helpText, isDark && styles.mutedDark]}>
+            At your current trend, the estimated weight on this date is {goalProjection.projectedWeight.toFixed(1)} kg. Your target is {Math.abs(goalProjection.projectedWeight - targetWeight).toFixed(1)} kg away from that estimate.
+          </Text>
+        ) : (
+          <Text style={[styles.helpText, isDark && styles.mutedDark]}>Enter a future ISO date and log at least 7 weigh-ins to compare your trajectory.</Text>
         )}
       </View>
 
@@ -141,21 +193,33 @@ export default function ProgressScreen() {
               <View style={[styles.macroFill, { width: `${macro.adherence[key]}%` }]} />
             </View>
 
-            <View style={[styles.card, isDark && styles.cardDark]}>
-              <Text style={[styles.cardTitle, isDark && styles.textDark]}>Adaptive guidance</Text>
-              {adaptiveGuidance ? (
-                <>
-                  <Text style={[styles.description, isDark && styles.mutedDark]}>{adaptiveGuidance.message}</Text>
-                  <Text style={[styles.guidanceValue, isDark && styles.textDark]}>Estimated maintenance: {adaptiveGuidance.maintenanceCalories} kcal/day</Text>
-                  <Text style={[styles.helpText, isDark && styles.mutedDark]}>A conservative adjusted target would be {adaptiveGuidance.suggestedCalories} kcal/day. Confidence: {adaptiveGuidance.confidence}.</Text>
-                </>
-              ) : (
-                <Text style={[styles.helpText, isDark && styles.mutedDark]}>Adaptive guidance unlocks after at least 14 days of food logging and 14 weigh-ins. It is informational and not medical advice.</Text>
-              )}
-            </View>
             <Text style={[styles.macroPercent, isDark && styles.mutedDark]}>{macro.adherence[key]}%</Text>
           </View>
         ))}
+      </View>
+
+      <View style={[styles.card, isDark && styles.cardDark]}>
+        <Text style={[styles.cardTitle, isDark && styles.textDark]}>Adaptive guidance</Text>
+        {adaptiveGuidance ? (
+          <>
+            <Text style={[styles.description, isDark && styles.mutedDark]}>{adaptiveGuidance.message}</Text>
+            <Text style={[styles.guidanceValue, isDark && styles.textDark]}>Estimated maintenance: {adaptiveGuidance.maintenanceCalories} kcal/day</Text>
+            <Text style={[styles.helpText, isDark && styles.mutedDark]}>A conservative adjusted target would be {adaptiveGuidance.suggestedCalories} kcal/day. Confidence: {adaptiveGuidance.confidence}.</Text>
+          </>
+        ) : (
+          <Text style={[styles.helpText, isDark && styles.mutedDark]}>Adaptive guidance unlocks after at least 14 days of food logging and 14 weigh-ins. It is informational and not medical advice.</Text>
+        )}
+      </View>
+
+      <View style={[styles.card, isDark && styles.cardDark]}>
+        <Text style={[styles.cardTitle, isDark && styles.textDark]}>Data quality</Text>
+        <Text style={[styles.description, isDark && styles.mutedDark]}>
+          {dataQuality.foodLoggedDays} food-log days, {dataQuality.weighIns} weigh-ins, and {dataQuality.measurementEntries} measurements in this range.
+        </Text>
+        <View style={[styles.macroTrack, isDark && styles.macroTrackDark]}>
+          <View style={[styles.macroFill, { width: `${dataQuality.coveragePercent}%` }]} />
+        </View>
+        <Text style={[styles.helpText, isDark && styles.mutedDark]}>{dataQuality.coveragePercent}% of days include food data. More consistent logging improves trend confidence.</Text>
       </View>
 
       <View style={[styles.card, isDark && styles.cardDark]}>
@@ -219,6 +283,11 @@ const styles = StyleSheet.create({
   measurementTypes: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 16, marginBottom: 12 },
   measurementChip: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 16, backgroundColor: '#e2e8f0' },
   guidanceValue: { fontSize: 18, fontWeight: '700', color: '#111827', marginTop: 4 },
+  goalInputRow: { flexDirection: 'row', gap: 12 },
+  goalInputGroup: { flex: 1 },
+  goalLabel: { marginBottom: 6, color: '#64748b', fontSize: 13, fontWeight: '600' },
+  goalInput: { minWidth: 0, padding: 12, borderRadius: 10, borderWidth: 1, borderColor: '#cbd5e1', backgroundColor: '#fff', color: '#111827' },
+  goalInputDark: { backgroundColor: '#262626', borderColor: '#444', color: '#f5f5f5' },
   textDark: { color: '#f5f5f5' },
   mutedDark: { color: '#a3a3a3' },
 });

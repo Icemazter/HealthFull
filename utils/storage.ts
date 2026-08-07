@@ -111,6 +111,7 @@ export const STORAGE_KEYS = {
   WATER_TODAY: 'water_today',
   BODY_MEASUREMENTS: 'body_measurements',
   DAILY_CONTEXT: 'daily_context',
+  PROGRESS_GOAL: 'progress_goal',
   RECIPES: 'recipes',
   LAST_INGREDIENT_WEIGHT: 'last_ingredient_weight',
 } as const;

@@ -59,6 +59,13 @@ export interface AdaptiveGuidance {
   message: string;
 }
 
+export interface DataQuality {
+  foodLoggedDays: number;
+  weighIns: number;
+  measurementEntries: number;
+  coveragePercent: number;
+}
+
 const dayMilliseconds = 24 * 60 * 60 * 1000;
 
 export const startOfDay = (timestamp: number) => {
@@ -217,3 +224,19 @@ export const latestMeasurementByType = (entries: MeasurementEntry[], type: strin
 
 export const calculateWaistToHeight = (waistCm: number, heightCm: number) =>
   heightCm > 0 && waistCm > 0 ? waistCm / heightCm : null;
+
+export const calculateDataQuality = (
+  foodEntries: NutritionEntry[],
+  weightEntries: WeightEntry[],
+  measurementEntries: MeasurementEntry[],
+  rangeDays: number
+): DataQuality => {
+  const foodLoggedDays = groupNutritionByDay(foodEntries).length;
+  const coveragePercent = Math.min(100, Math.round((foodLoggedDays / rangeDays) * 100));
+  return {
+    foodLoggedDays,
+    weighIns: weightEntries.filter((entry) => toNumber(entry.weight) > 0).length,
+    measurementEntries: measurementEntries.filter((entry) => toNumber(entry.value) > 0).length,
+    coveragePercent,
+  };
+};

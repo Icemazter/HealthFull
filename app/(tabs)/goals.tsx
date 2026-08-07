@@ -15,12 +15,6 @@ interface Goals {
   fatMethod?: 'weight' | 'calories';
 }
 
-interface WeightEntry {
-  date: string;
-  weight: string;
-  timestamp: number;
-}
-
 interface GlucoseEntry {
   glucose: string;
   timestamp: number;
@@ -66,7 +60,6 @@ export default function GoalsScreen() {
     goal: 'Maintain',
   });
   
-  const [weight, setWeight] = useState('');
   const [showBodyStats, setShowBodyStats] = useState(false);
   const [diabetesMode, setDiabetesMode] = usePersistedState(STORAGE_KEYS.DIABETES_MODE, false);
   const [showDiabetes, setShowDiabetes] = useState(false);
@@ -80,22 +73,12 @@ export default function GoalsScreen() {
   const [insulinNote, setInsulinNote] = useState('');
   const insulinManager = useHistoryManager<InsulinEntry>(STORAGE_KEYS.INSULIN_HISTORY);
   
-  const weightManager = useHistoryManager<WeightEntry>(STORAGE_KEYS.WEIGHT_HISTORY);
-
   useEffect(() => {
     // Backfill fiber for users with older saved goals
     if ((goals as any).fiber === undefined) {
       setGoals((prev) => ({ ...prev, fiber: '30' }));
     }
   }, [goals, setGoals]);
-
-  useEffect(() => {
-    // Update weight in stats when history changes
-    const latest = weightManager.history[0];
-    if (latest?.weight) {
-      setStats((prev) => ({ ...prev, weightKg: latest.weight }));
-    }
-  }, [weightManager.history]);
 
   const toggleDiabetesMode = async () => {
     await setDiabetesMode(!diabetesMode);
@@ -242,27 +225,6 @@ export default function GoalsScreen() {
     await feedback.success('Goals saved successfully!');
   };
 
-  const logWeight = async () => {
-    const { valid } = validate.number(weight);
-    if (!valid) {
-      return feedback.error('Please enter a valid weight.', 'Invalid Weight');
-    }
-
-    await weightManager.add({
-      date: new Date().toLocaleDateString(),
-      weight: weight,
-      timestamp: Date.now(),
-    });
-    setWeight('');
-    await feedback.success();
-  };
-
-  const deleteWeightEntry = (timestamp: number) => {
-    feedback.confirm('Delete Entry', 'Remove this weight entry?', () => {
-      weightManager.remove(timestamp);
-    });
-  };
-
   const deleteGlucoseEntry = (timestamp: number) => {
     feedback.confirm('Delete Entry', 'Remove this glucose entry?', () => {
       glucoseManager.remove(timestamp);
@@ -387,7 +349,7 @@ export default function GoalsScreen() {
         {showBodyStats && (
           <>
             <View style={styles.inlineRow}>
-              <View style={[styles.inputGroup, styles.inlineThird]}>
+              <View style={[styles.inputGroup, styles.inlineHalf]}>
                 <Text style={[styles.label, isDark && styles.labelDark]}>Height (cm)</Text>
                 <TextInput
                   style={[styles.input, isDark && styles.inputDark]}
@@ -398,18 +360,7 @@ export default function GoalsScreen() {
                   placeholderTextColor={isDark ? '#666' : '#999'}
                 />
               </View>
-              <View style={[styles.inputGroup, styles.inlineThird]}>
-                <Text style={[styles.label, isDark && styles.labelDark]}>Weight (kg)</Text>
-                <TextInput
-                  style={[styles.input, isDark && styles.inputDark]}
-                  value={stats.weightKg}
-                  onChangeText={(text) => setStats({ ...stats, weightKg: text })}
-                  keyboardType="decimal-pad"
-                  placeholder="75"
-                  placeholderTextColor={isDark ? '#666' : '#999'}
-                />
-              </View>
-              <View style={[styles.inputGroup, styles.inlineThird]}>
+              <View style={[styles.inputGroup, styles.inlineHalf]}>
                 <Text style={[styles.label, isDark && styles.labelDark]}>Age</Text>
                 <TextInput
                   style={[styles.input, isDark && styles.inputDark]}
@@ -420,6 +371,11 @@ export default function GoalsScreen() {
                   placeholderTextColor={isDark ? '#666' : '#999'}
                 />
               </View>
+            </View>
+            <View style={[styles.profileWeight, isDark && styles.profileWeightDark]}>
+              <Text style={[styles.profileWeightLabel, isDark && styles.labelDark]}>Current weight</Text>
+              <Text style={[styles.profileWeightValue, isDark && styles.textDark]}>{stats.weightKg || 'No weigh-in'}{stats.weightKg ? ' kg' : ''}</Text>
+              <Text style={[styles.activityHint, isDark && styles.activityHintDark]}>Weight entries are managed in Measurements and used here for goal calculations.</Text>
             </View>
 
             <View style={styles.chipGroup}>
@@ -475,43 +431,6 @@ export default function GoalsScreen() {
               <Text style={styles.suggestButtonText}>Apply Suggested Goals</Text>
             </Pressable>
           </>
-        )}
-      </View>
-
-      {/* Body Weight Tracking */}
-      <View style={[styles.card, isDark && styles.cardDark]}>
-        <Text style={[styles.cardTitle, isDark && styles.textDark]}>Body Weight</Text>
-        
-        <View style={styles.weightInputRow}>
-          <TextInput
-            style={[styles.weightInput, isDark && styles.weightInputDark]}
-            value={weight}
-            onChangeText={setWeight}
-            keyboardType="decimal-pad"
-            placeholder="75.5"
-            placeholderTextColor={isDark ? '#666' : '#999'}
-          />
-          <Text style={[styles.weightUnit, isDark && styles.weightUnitDark]}>kg</Text>
-          <Pressable style={styles.logButton} onPress={logWeight}>
-            <Text style={styles.logButtonText}>Log</Text>
-          </Pressable>
-        </View>
-
-        {weightManager.history.length > 0 && (
-          <View style={styles.weightHistory}>
-            <Text style={[styles.historyTitle, isDark && styles.historyTitleDark]}>Recent Entries</Text>
-            {weightManager.history.slice(0, 10).map((entry) => (
-              <View key={entry.timestamp} style={[styles.weightEntry, isDark && styles.weightEntryDark]}>
-                <View>
-                  <Text style={styles.weightValue}>{entry.weight} kg</Text>
-                  <Text style={[styles.weightDate, isDark && styles.historyTimeDark]}>{entry.date}</Text>
-                </View>
-                <Pressable onPress={() => deleteWeightEntry(entry.timestamp)}>
-                  <Text style={styles.deleteButton}>✕</Text>
-                </Pressable>
-              </View>
-            ))}
-          </View>
         )}
       </View>
 
@@ -887,6 +806,29 @@ const styles = StyleSheet.create({
   },
   inlineThird: {
     flex: 1,
+  },
+  profileWeight: {
+    marginBottom: 16,
+    padding: 14,
+    borderRadius: 10,
+    backgroundColor: Palette.lightGray2,
+    borderWidth: 1,
+    borderColor: '#e5e5e5',
+  },
+  profileWeightDark: {
+    backgroundColor: '#262626',
+    borderColor: '#404040',
+  },
+  profileWeightLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Palette.darkGray,
+  },
+  profileWeightValue: {
+    marginTop: 4,
+    fontSize: 18,
+    fontWeight: '700',
+    color: Palette.primary,
   },
   label: {
     fontSize: 14,

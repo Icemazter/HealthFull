@@ -1,8 +1,9 @@
 import { Palette } from '@/constants/theme';
-import { useHistoryManager } from '@/hooks/use-persisted-state';
+import { useHistoryManager, usePersistedState } from '@/hooks/use-persisted-state';
 import { useAppTheme } from '@/hooks/use-theme';
 import { feedback, validate } from '@/utils/feedback';
-import { STORAGE_KEYS } from '@/utils/storage';
+import { storage, STORAGE_KEYS } from '@/utils/storage';
+import { startOfDay } from '@/utils/health-analytics';
 import React, { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -46,20 +47,23 @@ export default function MeasurementsScreen() {
   const [note, setNote] = useState('');
   const weightManager = useHistoryManager<WeightEntry>(STORAGE_KEYS.WEIGHT_HISTORY);
   const measurementManager = useHistoryManager<BodyMeasurement>(STORAGE_KEYS.BODY_MEASUREMENTS);
-  const contextManager = useHistoryManager<DailyContext>(STORAGE_KEYS.DAILY_CONTEXT);
+  const [, setContexts] = usePersistedState<DailyContext[]>(STORAGE_KEYS.DAILY_CONTEXT, []);
 
   const logWeight = async () => {
     if (!validate.number(weight).valid) {
       return feedback.error('Please enter a valid weight.', 'Invalid Weight');
     }
 
-    await weightManager.add({
+    const timestamp = Date.now();
+    await weightManager.addOrReplace({
       date: new Date().toLocaleDateString(),
       weight,
-      timestamp: Date.now(),
-    });
+      timestamp,
+    }, (entry) => startOfDay(entry.timestamp) === startOfDay(timestamp));
+    const bodyStats = await storage.get<Record<string, string>>(STORAGE_KEYS.BODY_STATS, {});
+    await storage.set(STORAGE_KEYS.BODY_STATS, { ...(bodyStats ?? {}), weightKg: weight });
     setWeight('');
-    await feedback.success();
+    await feedback.success('Weight logged. A same-day entry is replaced to keep your trend clean.');
   };
 
   const logMeasurement = async () => {
@@ -67,14 +71,15 @@ export default function MeasurementsScreen() {
       return feedback.error('Please enter a valid measurement.', 'Invalid Measurement');
     }
 
-    await measurementManager.add({
+    const timestamp = Date.now();
+    await measurementManager.addOrReplace({
       id: `${Date.now()}-${type}`,
       type,
       value: measurement,
-      timestamp: Date.now(),
-    });
+      timestamp,
+    }, (entry) => entry.type === type && startOfDay(entry.timestamp) === startOfDay(timestamp));
     setMeasurement('');
-    await feedback.success();
+    await feedback.success('Measurement logged. A same-day value for this area is replaced.');
   };
 
   const saveContext = async () => {
@@ -86,7 +91,7 @@ export default function MeasurementsScreen() {
       digestion,
       note: note.trim() || undefined,
     };
-    await contextManager.add(context);
+    await setContexts((previous) => Array.isArray(previous) ? [context, ...previous] : [context]);
     setNote('');
     await feedback.success('Daily context saved.');
   };
@@ -102,7 +107,7 @@ export default function MeasurementsScreen() {
         </Pressable>
       </View>
 
-      <View style={[styles.contextSection, isDark && styles.contextSectionDark]}>
+      <View style={[styles.card, isDark && styles.cardDark]}>
         <Text style={[styles.cardTitle, isDark && styles.textDark]}>Body Weight</Text>
         <Text style={[styles.description, isDark && styles.mutedDark]}>Log a consistent weigh-in to follow your trend over time.</Text>
         <View style={styles.inputRow}>
@@ -120,7 +125,7 @@ export default function MeasurementsScreen() {
           </Pressable>
         </View>
 
-        <View style={[styles.card, isDark && styles.cardDark]}>
+        <View style={[styles.contextSection, isDark && styles.contextSectionDark]}>
           <Text style={[styles.cardTitle, isDark && styles.textDark]}>Daily context</Text>
           <Text style={[styles.description, isDark && styles.mutedDark]}>Optional context helps interpret normal changes in weight and appetite.</Text>
           <Text style={[styles.label, isDark && styles.mutedDark]}>Sleep hours</Text>
