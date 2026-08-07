@@ -23,6 +23,8 @@ interface FoodData {
   imageUrl?: string;
   servingSize?: number; // in grams or ml depending on unit
   unit?: 'g' | 'ml'; // Whether nutrition is per 100g or 100ml
+  barcode?: string;
+  missingNutritionFields?: string[];
 }
 
 type VolumeUnit = 'g' | 'ml' | 'dl' | 'tbsp' | 'tsp';
@@ -169,6 +171,13 @@ export default function ScanScreen() {
       fat: nutrients.fat ?? 0,
       fiber: nutrients.fiber ?? 0,
     };
+  };
+
+  const showFoodOptions = (food: FoodData) => {
+    setFoodData(food);
+    setServingSize(formatAmount(food.servingSize || 100));
+    setUnitType(food.unit || 'g');
+    setShowOptions(true);
   };
 
   // Format amount for display (remove decimals if whole number)
@@ -518,6 +527,12 @@ export default function ScanScreen() {
       }
       
       const data = result.data;
+      const cachedProducts = (await storage.get<Record<string, FoodData>>(STORAGE_KEYS.BARCODE_CACHE, {})) ?? {};
+      const cachedFood = cachedProducts[data];
+      if (cachedFood) {
+        showFoodOptions(cachedFood);
+        return;
+      }
 
       // Fetch from OpenFoodFacts API with timeout
       const controller = new AbortController();
@@ -525,7 +540,7 @@ export default function ScanScreen() {
       
       let response;
       try {
-        response = await fetch(`https://world.openfoodfacts.org/api/v2/product/${data}.json`, {
+        response = await fetch(`https://world.openfoodfacts.org/api/v2/product/${data}.json?fields=product_name,product_name_sv,product_name_en,nutriments,image_front_url,image_url,serving_quantity,categories_tags`, {
           signal: controller.signal,
         });
       } catch (fetchError) {
@@ -581,24 +596,35 @@ export default function ScanScreen() {
         
         const productUnit = isLiquid ? 'ml' : 'g';
 
+        const energyKcal = Number(nutrients['energy-kcal_100g'] ?? nutrients['energy-kcal']);
+        const energyKj = Number(nutrients.energy_100g ?? nutrients.energy);
+        const nutritionValues = {
+          calories: Number.isFinite(energyKcal) && energyKcal > 0 ? energyKcal : Number.isFinite(energyKj) && energyKj > 0 ? energyKj / 4.184 : 0,
+          protein: Number(nutrients['proteins_100g'] ?? nutrients.proteins) || 0,
+          carbs: Number(nutrients['carbohydrates_100g'] ?? nutrients.carbohydrates) || 0,
+          fat: Number(nutrients['fat_100g'] ?? nutrients.fat) || 0,
+          fiber: Number(nutrients['fiber_100g'] ?? nutrients['fibers_100g'] ?? nutrients.fiber ?? nutrients.fibers) || 0,
+        };
+        const missingNutritionFields = [
+          nutritionValues.calories <= 0 && 'energy',
+          nutrients['proteins_100g'] === undefined && nutrients.proteins === undefined && 'protein',
+          nutrients['carbohydrates_100g'] === undefined && nutrients.carbohydrates === undefined && 'carbohydrates',
+          nutrients['fat_100g'] === undefined && nutrients.fat === undefined && 'fat',
+        ].filter((field): field is string => Boolean(field));
         const food: FoodData = {
-          name: product.product_name || 'Unknown Product',
+          name: product.product_name_sv || product.product_name || product.product_name_en || 'Unknown Product',
           nutrients: {
-            calories: nutrients['energy-kcal_100g'] || nutrients['energy-kcal'] || 0,
-            protein: nutrients['proteins_100g'] || nutrients.proteins || 0,
-            carbs: nutrients['carbohydrates_100g'] || nutrients.carbohydrates || 0,
-            fat: nutrients['fat_100g'] || nutrients.fat || 0,
-            fiber: nutrients['fiber_100g'] || nutrients['fibers_100g'] || nutrients.fiber || nutrients.fibers || 0,
+            ...nutritionValues,
           },
           imageUrl: product.image_front_url || product.image_url,
           servingSize: product.serving_quantity || 100, // Use API serving size or default to 100
           unit: productUnit, // Track if nutrition is per 100g or 100ml
+          barcode: data,
+          missingNutritionFields,
         };
 
-        setFoodData(food);
-        setServingSize(formatAmount(food.servingSize || 100));
-        setUnitType(productUnit); // Set initial unit based on product type
-        setShowOptions(true);
+        await storage.set(STORAGE_KEYS.BARCODE_CACHE, { ...cachedProducts, [data]: food });
+        showFoodOptions(food);
       } else {
         // Error feedback
         if (!isWeb) {
@@ -948,6 +974,14 @@ export default function ScanScreen() {
                   <Text style={styles.macroValue}>{(parseFloat(foodData?.nutrients.fiber?.toFixed(1) || '0'))}g</Text>
                 </View>
               </View>
+              {(foodData?.missingNutritionFields?.length ?? 0) > 0 && (
+                <View style={{ marginTop: 12, padding: 12, borderRadius: 10, backgroundColor: '#fff7ed', borderWidth: 1, borderColor: '#fdba74' }}>
+                  <Text style={{ color: '#9a3412', fontSize: 13, fontWeight: '700' }}>Incomplete product data</Text>
+                  <Text style={{ marginTop: 3, color: '#9a3412', fontSize: 12 }}>
+                    Missing: {foodData?.missingNutritionFields?.join(', ')}. Review the package label before adding this food.
+                  </Text>
+                </View>
+              )}
             </View>
 
             <View style={styles.mealContainer}>

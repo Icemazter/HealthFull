@@ -103,6 +103,7 @@ export const STORAGE_KEYS = {
   BODY_STATS: 'body_stats',
   WEIGHT_HISTORY: 'weight_history',
   FOOD_ENTRIES: 'food_entries',
+  BARCODE_CACHE: 'barcode_cache',
   FOOD_FAVORITES: 'food_favorites',
   GLUCOSE_HISTORY: 'glucose_history',
   INSULIN_HISTORY: 'insulin_history',
