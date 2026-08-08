@@ -16,15 +16,42 @@ interface TrendChartProps {
   height?: number;
   selectedTimestamp?: number | null;
   onPointSelect?: (point: TrendChartPoint) => void;
+  forecast?: { timestamp: number; value: number; lowerBound: number; upperBound: number };
+  target?: { timestamp: number; value: number };
 }
 
-export function TrendChart({ points, color, unit, isDark, height, selectedTimestamp, onPointSelect }: TrendChartProps) {
+interface ChartValue {
+  timestamp: number;
+  value: number;
+}
+
+const lineStyle = (from: ChartValue, to: ChartValue, toX: (timestamp: number) => number, toY: (value: number) => number, color: string, width = 2, opacity = 1) => {
+  const x1 = toX(from.timestamp);
+  const y1 = toY(from.value);
+  const x2 = toX(to.timestamp);
+  const y2 = toY(to.value);
+  return {
+    backgroundColor: color,
+    left: x1,
+    top: y1,
+    width: Math.hypot(x2 - x1, y2 - y1),
+    height: width,
+    opacity,
+    transform: [{ rotate: `${Math.atan2(y2 - y1, x2 - x1) * 180 / Math.PI}deg` }],
+  };
+};
+
+export function TrendChart({ points, color, unit, isDark, height, selectedTimestamp, onPointSelect, forecast, target }: TrendChartProps) {
   if (points.length < 2) {
     return <Text style={[styles.empty, isDark && styles.emptyDark]}>Add at least two entries to begin a trend.</Text>;
   }
 
   const orderedPoints = [...points].sort((a, b) => a.timestamp - b.timestamp);
-  const values = orderedPoints.flatMap((point) => [point.value, point.trend ?? point.value]);
+  const values = [
+    ...orderedPoints.flatMap((point) => [point.value, point.trend ?? point.value]),
+    ...(forecast ? [forecast.value, forecast.lowerBound, forecast.upperBound] : []),
+    ...(target ? [target.value] : []),
+  ];
   const dataMin = Math.min(...values);
   const dataMax = Math.max(...values);
   const dataRange = dataMax - dataMin;
@@ -33,10 +60,18 @@ export function TrendChart({ points, color, unit, isDark, height, selectedTimest
   const max = Math.ceil((dataMax + padding) * 10) / 10;
   const range = Math.max(max - min, 0.1);
   const selectedPoint = orderedPoints.find((point) => point.timestamp === selectedTimestamp);
-  const labelCount = Math.min(5, orderedPoints.length);
+  const firstTimestamp = orderedPoints[0].timestamp;
+  const lastTimestamp = Math.max(orderedPoints[orderedPoints.length - 1].timestamp, forecast?.timestamp ?? 0, target?.timestamp ?? 0);
+  const timeRange = Math.max(lastTimestamp - firstTimestamp, 24 * 60 * 60 * 1000);
+  const timelinePoints = [
+    ...orderedPoints,
+    ...(forecast ? [{ timestamp: forecast.timestamp, value: forecast.value }] : []),
+    ...(target ? [{ timestamp: target.timestamp, value: target.value }] : []),
+  ].sort((a, b) => a.timestamp - b.timestamp);
+  const labelCount = Math.min(5, timelinePoints.length);
   const xAxisPoints = Array.from({ length: labelCount }, (_, index) => {
-    const pointIndex = Math.round(index * (orderedPoints.length - 1) / Math.max(labelCount - 1, 1));
-    return orderedPoints[pointIndex];
+    const pointIndex = Math.round(index * (timelinePoints.length - 1) / Math.max(labelCount - 1, 1));
+    return timelinePoints[pointIndex];
   });
   const chartHeight = height ?? Math.min(220, 155 + Math.ceil(orderedPoints.length / 45) * 12);
   const regression = linearRegression(orderedPoints.map((point) => ({ timestamp: point.timestamp, value: point.trend ?? point.value })));
@@ -55,25 +90,30 @@ export function TrendChart({ points, color, unit, isDark, height, selectedTimest
             setPlotSize({ width, height: plotHeight });
           }
         }}>
-        {plotSize.width > 0 && orderedPoints.slice(0, -1).map((point, index) => {
-          const nextPoint = orderedPoints[index + 1];
-          const x1 = ((index + 0.5) / orderedPoints.length) * plotSize.width;
-          const x2 = ((index + 1.5) / orderedPoints.length) * plotSize.width;
-          const y1 = plotSize.height - ((point.trend ?? point.value) - min) / range * plotSize.height;
-          const y2 = plotSize.height - ((nextPoint.trend ?? nextPoint.value) - min) / range * plotSize.height;
-          const length = Math.hypot(x2 - x1, y2 - y1);
-          const angle = Math.atan2(y2 - y1, x2 - x1) * 180 / Math.PI;
+        {plotSize.width > 0 && (() => {
+          const toX = (timestamp: number) => ((timestamp - firstTimestamp) / timeRange) * plotSize.width;
+          const toY = (value: number) => plotSize.height - ((value - min) / range) * plotSize.height;
+          const latest = orderedPoints[orderedPoints.length - 1];
           return (
-            <View
-              key={`${point.timestamp}-${nextPoint.timestamp}`}
-              pointerEvents="none"
-              style={[styles.trendLine, { backgroundColor: color, left: x1, top: y1, width: length, transform: [{ rotate: `${angle}deg` }] }]}
-            />
+            <>
+              {orderedPoints.slice(0, -1).map((point, index) => (
+                <View key={`${point.timestamp}-${orderedPoints[index + 1].timestamp}`} pointerEvents="none" style={[styles.trendLine, lineStyle({ timestamp: point.timestamp, value: point.trend ?? point.value }, { timestamp: orderedPoints[index + 1].timestamp, value: orderedPoints[index + 1].trend ?? orderedPoints[index + 1].value }, toX, toY, color)]} />
+              ))}
+              {forecast && (
+                <>
+                  <View pointerEvents="none" style={[styles.forecastLine, lineStyle({ timestamp: latest.timestamp, value: latest.trend ?? latest.value }, forecast, toX, toY, color, 2, 0.85)]} />
+                  <View pointerEvents="none" style={[styles.forecastBound, lineStyle({ timestamp: latest.timestamp, value: latest.trend ?? latest.value }, { timestamp: forecast.timestamp, value: forecast.lowerBound }, toX, toY, color, 1, 0.45)]} />
+                  <View pointerEvents="none" style={[styles.forecastBound, lineStyle({ timestamp: latest.timestamp, value: latest.trend ?? latest.value }, { timestamp: forecast.timestamp, value: forecast.upperBound }, toX, toY, color, 1, 0.45)]} />
+                </>
+              )}
+              {target && <View pointerEvents="none" style={[styles.targetLine, lineStyle({ timestamp: latest.timestamp, value: latest.trend ?? latest.value }, target, toX, toY, '#f59e0b', 2, 0.8)]} />}
+            </>
           );
-        })}
+        })()}
         {orderedPoints.map((point, index) => {
           const rawBottom = ((point.value - min) / range) * 100;
           const trendBottom = (((point.trend ?? point.value) - min) / range) * 100;
+          const left = ((point.timestamp - firstTimestamp) / timeRange) * 100;
           return (
             <Pressable
               key={`${point.timestamp}-${index}`}
@@ -81,13 +121,15 @@ export function TrendChart({ points, color, unit, isDark, height, selectedTimest
               accessibilityLabel={`${new Date(point.timestamp).toLocaleDateString()}: ${point.value.toFixed(1)}${unit}`}
               onPress={() => onPointSelect?.(point)}
               onHoverIn={() => onPointSelect?.(point)}
-              style={[styles.pointColumn, selectedTimestamp === point.timestamp && styles.selectedColumn]}>
+              style={[styles.pointColumn, { left: `${left}%` }, selectedTimestamp === point.timestamp && styles.selectedColumn]}>
               {selectedTimestamp === point.timestamp && <View style={[styles.selectionGuide, { backgroundColor: color }]} />}
               <View style={[styles.trendPoint, { bottom: `${trendBottom}%`, backgroundColor: color }]} />
               <View style={[styles.rawPoint, { bottom: `${rawBottom}%`, borderColor: color }]} />
             </Pressable>
           );
         })}
+        {forecast && <View pointerEvents="none" style={[styles.forecastMarker, { left: `${((forecast.timestamp - firstTimestamp) / timeRange) * 100}%`, bottom: `${((forecast.value - min) / range) * 100}%`, borderColor: color }]} />}
+        {target && <View pointerEvents="none" style={[styles.targetMarker, { left: `${((target.timestamp - firstTimestamp) / timeRange) * 100}%`, bottom: `${((target.value - min) / range) * 100}%` }]} />}
       </View>
       {regression && (
         <View style={[styles.equationBadge, isDark && styles.equationBadgeDark]}>
@@ -119,12 +161,17 @@ const styles = StyleSheet.create({
   chart: { position: 'relative', paddingTop: 14, paddingRight: 10, paddingBottom: 30, paddingLeft: 48, borderRadius: 12, backgroundColor: '#f8fafc' },
   chartDark: { backgroundColor: '#262626' },
   plot: { flex: 1, flexDirection: 'row', alignItems: 'stretch', justifyContent: 'space-around', borderBottomWidth: 1, borderLeftWidth: 1, borderColor: '#cbd5e1' },
-  pointColumn: { flex: 1, position: 'relative' },
+  pointColumn: { position: 'absolute', top: 0, bottom: 0, width: 24, marginLeft: -12 },
   selectedColumn: { backgroundColor: 'rgba(37, 99, 235, 0.12)' },
   selectionGuide: { position: 'absolute', top: 0, bottom: 0, left: '50%', width: 1, opacity: 0.5 },
   rawPoint: { position: 'absolute', left: '50%', width: 8, height: 8, borderRadius: 4, backgroundColor: '#fff', borderWidth: 2, marginLeft: -4 },
   trendPoint: { position: 'absolute', left: '50%', width: 5, height: 5, borderRadius: 3, marginLeft: -2.5 },
   trendLine: { position: 'absolute', height: 2, borderRadius: 1, opacity: 0.7, transformOrigin: 'left center' },
+  forecastLine: { borderStyle: 'dashed' },
+  forecastBound: { borderStyle: 'dashed' },
+  targetLine: { borderStyle: 'dashed' },
+  forecastMarker: { position: 'absolute', width: 10, height: 10, marginLeft: -5, marginBottom: -5, borderRadius: 5, borderWidth: 2, backgroundColor: '#262626' },
+  targetMarker: { position: 'absolute', width: 10, height: 10, marginLeft: -5, marginBottom: -5, borderRadius: 5, backgroundColor: '#f59e0b' },
   axisLabel: { position: 'absolute', left: 5, color: '#64748b', fontSize: 11 },
   axisLabelDark: { color: '#a3a3a3' },
   maxLabel: { top: 8 },

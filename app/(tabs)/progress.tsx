@@ -233,6 +233,21 @@ export default function ProgressScreen() {
   const contextSummary = useMemo(() => summarizeDailyContext(filterRange(activeData.contexts, range)), [activeData.contexts, range]);
   const selectedWeight = weightTrend.find((point) => point.timestamp === selectedWeightTimestamp);
   const selectedMeasurement = selectedMeasurements.find((point) => point.timestamp === selectedMeasurementTimestamp);
+  const weightForecast = useMemo(() => {
+    const latest = weightTrend[weightTrend.length - 1];
+    if (!latest || !projection) return undefined;
+    const daysAhead = goalDaysAway > 0 ? Math.min(goalDaysAway, 90) : 28;
+    const forecast = forecastWeight(activeData.weights, daysAhead);
+    return forecast ? {
+      timestamp: latest.timestamp + daysAhead * 24 * 60 * 60 * 1000,
+      value: forecast.projectedWeight,
+      lowerBound: forecast.lowerBound,
+      upperBound: forecast.upperBound,
+    } : undefined;
+  }, [activeData.weights, goalDaysAway, projection, weightTrend]);
+  const targetTrajectory = targetWeight > 0 && goalDaysAway > 0
+    ? { timestamp: targetDate.getTime(), value: targetWeight }
+    : undefined;
 
   const statCards = [
     { value: macro.loggedDays, label: 'Days Logged' },
@@ -293,6 +308,8 @@ export default function ProgressScreen() {
             isDark={isDark}
             selectedTimestamp={selectedWeightTimestamp}
             onPointSelect={(point) => setSelectedWeightTimestamp(point.timestamp)}
+            forecast={weightForecast}
+            target={targetTrajectory}
           />
         ) : (
           <ValueTable
@@ -319,6 +336,12 @@ export default function ProgressScreen() {
 
         ) : (
           <Text style={[styles.helpText, isDark && styles.mutedDark]}>Log at least 7 weigh-ins to unlock a conservative 28-day projection.</Text>
+        )}
+        {(weightForecast || targetTrajectory) && (
+          <View style={styles.chartLegend}>
+            <Text style={[styles.legendItem, isDark && styles.mutedDark]}><Text style={styles.legendForecast}>- - </Text>Forecast range</Text>
+            {targetTrajectory && <Text style={[styles.legendItem, isDark && styles.mutedDark]}><Text style={styles.legendTarget}>- - </Text>Target path</Text>}
+          </View>
         )}
       </View>
 
@@ -565,6 +588,10 @@ const styles = StyleSheet.create({
   measurementChip: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 16, backgroundColor: '#e2e8f0' },
   guidanceValue: { fontSize: 18, fontWeight: '700', color: '#111827', marginTop: 4 },
   pointDetail: { marginTop: 12, color: '#64748b', fontSize: 13 },
+  chartLegend: { flexDirection: 'row', flexWrap: 'wrap', gap: 14, marginTop: 10 },
+  legendItem: { color: '#64748b', fontSize: 12 },
+  legendForecast: { color: '#2563eb', fontWeight: '700' },
+  legendTarget: { color: '#f59e0b', fontWeight: '700' },
   cardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   analyticsToggle: { flexDirection: 'row', padding: 2, borderRadius: 8, backgroundColor: '#e2e8f0' },
   analyticsToggleDark: { backgroundColor: '#262626' },
