@@ -1,4 +1,6 @@
 import { AchievementCard } from '@/components/ui/achievement-card';
+import { AdherenceHeatmap } from '@/components/progress/AdherenceHeatmap';
+import { WeeklyAverages } from '@/components/progress/WeeklyAverages';
 import { Palette } from '@/constants/theme';
 import { useAppTheme } from '@/hooks/use-theme';
 import { storage, STORAGE_KEYS } from '@/utils/storage';
@@ -27,6 +29,8 @@ export default function ProgressScreen() {
     longestStreak: 0,
     weeklyWorkouts: 0,
   });
+  const [foodHistory, setFoodHistory] = useState<any[]>([]);
+  const [calorieGoal, setCalorieGoal] = useState(2000);
 
   useEffect(() => {
     loadProgress();
@@ -92,6 +96,10 @@ export default function ProgressScreen() {
     try {
       const workoutData = await storage.get<any[]>(STORAGE_KEYS.WORKOUT_HISTORY, []) ?? [];
       const foodData = await storage.get<any[]>(STORAGE_KEYS.FOOD_ENTRIES, []) ?? [];
+      const macroGoals = await storage.get<any>(STORAGE_KEYS.MACRO_GOALS, { calories: 2000 });
+      
+      setFoodHistory(foodData);
+      setCalorieGoal(Number(macroGoals?.calories ?? 2000) || 2000);
       
       const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
       const weeklyWorkouts = workoutData.filter((w: any) => w.timestamp > weekAgo).length;
@@ -253,6 +261,22 @@ export default function ProgressScreen() {
           />
         ))}
       </View>
+
+      {/* Nutrition insights */}
+      {foodHistory.length > 0 && (
+        <>
+          <WeeklyAverages
+            isDark={isDark}
+            foodHistory={foodHistory}
+            calorieGoal={calorieGoal}
+          />
+          <AdherenceHeatmap
+            isDark={isDark}
+            foodHistory={foodHistory}
+            calorieGoal={calorieGoal}
+          />
+        </>
+      )}
     </ScrollView>
     </>
   );

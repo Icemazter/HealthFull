@@ -1,3 +1,7 @@
+import { MacroSuggestion } from '@/components/ai/MacroSuggestion';
+import { NaturalLanguageLogger } from '@/components/ai/NaturalLanguageLogger';
+import { PhotoAnalyzer } from '@/components/ai/PhotoAnalyzer';
+import { GroceryList } from '@/components/nutrition/GroceryList';
 import { IngredientSelector, RecipeBuilder, RecipeLogger, RecipesList } from '@/components/recipes';
 import { ManualEntryModal } from '@/components/scan/ManualEntryModal';
 import { ThemedText } from '@/components/themed-text';
@@ -11,6 +15,7 @@ import { useRecipes } from '@/hooks/use-recipes';
 import { useAppTheme } from '@/hooks/use-theme';
 import { feedback } from '@/utils/feedback';
 import { addIngredientToRecipe, Recipe, RecipeIngredient } from '@/utils/recipes';
+import { ParsedFoodEntry } from '@/utils/openai';
 import { storage, STORAGE_KEYS } from '@/utils/storage';
 import { useFocusEffect } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
@@ -42,14 +47,22 @@ export default function HomeScreen() {
   const [showManualEntry, setShowManualEntry] = useState(false);
   const [showEditEntry, setShowEditEntry] = useState(false);
   const [editingEntry, setEditingEntry] = useState<FoodEntry | null>(null);
+  const [showNLLogger, setShowNLLogger] = useState(false);
+  const [showPhotoAnalyzer, setShowPhotoAnalyzer] = useState(false);
+  const [showMacroSuggestion, setShowMacroSuggestion] = useState(false);
+  const [showGroceryList, setShowGroceryList] = useState(false);
+  const [openAIKey, setOpenAIKey] = useState('');
   const insets = useSafeAreaInsets();
 
   const [refreshKey, setRefreshKey] = useState(0);
 
   useFocusEffect(
     useCallback(() => {
-      // Force re-load when screen is focused to ensure latest data
       setRefreshKey(k => k + 1);
+      // Load OpenAI API key when screen is focused
+      storage.get<string>(STORAGE_KEYS.OPENAI_API_KEY).then((key) => {
+        if (key) setOpenAIKey(key);
+      });
     }, [])
   );
 
@@ -99,6 +112,37 @@ export default function HomeScreen() {
       'Delete all food entries for today?',
       () => foodManager.clearToday()
     );
+  }, [foodManager]);
+
+  const handleAIEntries = useCallback(async (entries: ParsedFoodEntry[]) => {
+    const now = Date.now();
+    for (let i = 0; i < entries.length; i++) {
+      const e = entries[i];
+      const newEntry: FoodEntry = {
+        id: `ai_${now}_${i}`,
+        name: e.name,
+        calories: e.calories,
+        protein: e.protein,
+        carbs: e.carbs,
+        fat: e.fat,
+        fiber: e.fiber ?? 0,
+        timestamp: now + i,
+        mealType: e.mealType ?? 'Snack',
+      };
+      await foodManager.addEntry(newEntry);
+    }
+    setRefreshKey(k => k + 1);
+    await feedback.success(`${entries.length} item${entries.length > 1 ? 's' : ''} logged!`);
+  }, [foodManager]);
+
+  const handleCopyYesterday = useCallback(async () => {
+    const count = await foodManager.copyFromYesterday();
+    if (count === 0) {
+      feedback.alert('Nothing to copy', 'No food entries found for yesterday.');
+    } else {
+      setRefreshKey(k => k + 1);
+      await feedback.success(`Copied ${count} item${count > 1 ? 's' : ''} from yesterday!`);
+    }
   }, [foodManager]);
 
   const handleCreateRecipe = useCallback(async () => {
@@ -322,6 +366,34 @@ export default function HomeScreen() {
         <Text style={styles.scanButtonText}>Scan Barcode</Text>
       </Pressable>
 
+      {/* AI Logging Row */}
+      <View style={styles.aiRow}>
+        <Pressable
+          style={[styles.aiBtn, isDark && styles.aiBtnDark]}
+          onPress={() => setShowNLLogger(true)}>
+          <Text style={styles.aiBtnEmoji}>🤖</Text>
+          <Text style={[styles.aiBtnText, isDark && styles.aiBtnTextDark]}>AI Log</Text>
+        </Pressable>
+        <Pressable
+          style={[styles.aiBtn, isDark && styles.aiBtnDark]}
+          onPress={() => setShowPhotoAnalyzer(true)}>
+          <Text style={styles.aiBtnEmoji}>📸</Text>
+          <Text style={[styles.aiBtnText, isDark && styles.aiBtnTextDark]}>Photo</Text>
+        </Pressable>
+        <Pressable
+          style={[styles.aiBtn, isDark && styles.aiBtnDark]}
+          onPress={handleCopyYesterday}>
+          <Text style={styles.aiBtnEmoji}>📋</Text>
+          <Text style={[styles.aiBtnText, isDark && styles.aiBtnTextDark]}>Yesterday</Text>
+        </Pressable>
+        <Pressable
+          style={[styles.aiBtn, isDark && styles.aiBtnDark]}
+          onPress={() => setShowMacroSuggestion(true)}>
+          <Text style={styles.aiBtnEmoji}>🧠</Text>
+          <Text style={[styles.aiBtnText, isDark && styles.aiBtnTextDark]}>Suggest</Text>
+        </Pressable>
+      </View>
+
       {foodManager.entries.length > 0 && (
         <Pressable
           style={[styles.clearButton, isDark && styles.clearButtonDark]}
@@ -359,6 +431,13 @@ export default function HomeScreen() {
           setShowRecipeLogger(true);
         }}
       />
+      {recipes.length > 0 && (
+        <Pressable
+          style={[styles.groceryBtn, isDark && styles.groceryBtnDark]}
+          onPress={() => setShowGroceryList(true)}>
+          <Text style={[styles.groceryBtnText, isDark && styles.groceryBtnTextDark]}>🛒 Grocery List</Text>
+        </Pressable>
+      )}
 
       <ThemedView style={styles.listContainer}>
         <View style={styles.listHeader}>
@@ -470,6 +549,53 @@ export default function HomeScreen() {
           setEditingEntry(null);
         }}
         onSave={handleSaveEditedEntry}
+      />
+
+      <NaturalLanguageLogger
+        visible={showNLLogger}
+        isDark={isDark}
+        apiKey={openAIKey}
+        onAdd={async (entries) => {
+          setShowNLLogger(false);
+          await handleAIEntries(entries);
+        }}
+        onCancel={() => setShowNLLogger(false)}
+      />
+
+      <PhotoAnalyzer
+        visible={showPhotoAnalyzer}
+        isDark={isDark}
+        apiKey={openAIKey}
+        onAdd={async (entries) => {
+          setShowPhotoAnalyzer(false);
+          await handleAIEntries(entries);
+        }}
+        onCancel={() => setShowPhotoAnalyzer(false)}
+      />
+
+      <MacroSuggestion
+        visible={showMacroSuggestion}
+        isDark={isDark}
+        apiKey={openAIKey}
+        remaining={{
+          calories: Math.max(0, normalizedGoals.calories - foodManager.totals.calories),
+          protein: Math.max(0, normalizedGoals.protein - foodManager.totals.protein),
+          carbs: Math.max(0, normalizedGoals.carbs - foodManager.totals.carbs),
+          fat: Math.max(0, normalizedGoals.fat - foodManager.totals.fat),
+          fiber: Math.max(0, normalizedGoals.fiber - (foodManager.totals.fiber ?? 0)),
+        }}
+        onAdd={async (entries) => {
+          setShowMacroSuggestion(false);
+          await handleAIEntries(entries);
+        }}
+        onCancel={() => setShowMacroSuggestion(false)}
+      />
+
+      <GroceryList
+        visible={showGroceryList}
+        isDark={isDark}
+        recipes={recipes}
+        onClose={() => setShowGroceryList(false)}
       />
     </ScrollView>
     </>
@@ -765,5 +891,58 @@ const styles = StyleSheet.create({
   },
   emptyTextDark: {
     color: '#9ca3af',
+  },
+  aiRow: {
+    flexDirection: 'row',
+    marginHorizontal: 16,
+    marginBottom: 12,
+    gap: 8,
+  },
+  aiBtn: {
+    flex: 1,
+    backgroundColor: '#f0f4ff',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#c7d5f8',
+  },
+  aiBtnDark: {
+    backgroundColor: '#1e3a8a22',
+    borderColor: '#3b5fc0',
+  },
+  aiBtnEmoji: {
+    fontSize: 20,
+    marginBottom: 2,
+  },
+  aiBtnText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: Palette.primary,
+  },
+  aiBtnTextDark: {
+    color: '#60a5fa',
+  },
+  groceryBtn: {
+    marginHorizontal: 16,
+    marginBottom: 8,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: '#f0fdf4',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+  },
+  groceryBtnDark: {
+    backgroundColor: '#14532d22',
+    borderColor: '#166534',
+  },
+  groceryBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#16a34a',
+  },
+  groceryBtnTextDark: {
+    color: '#4ade80',
   },
 });

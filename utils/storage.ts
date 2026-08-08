@@ -116,4 +116,7 @@ export const STORAGE_KEYS = {
   HEVY_API_KEY: 'hevy_api_key',
   CUSTOM_EXERCISES: 'custom_exercises',
   LAST_INGREDIENT_WEIGHT: 'last_ingredient_weight',
+  OPENAI_API_KEY: 'openai_api_key',
+  MACRO_CYCLING: 'macro_cycling',
+  DAY_TYPES: 'day_types',
 } as const;
