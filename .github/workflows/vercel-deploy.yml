@@ -25,7 +25,8 @@ jobs:
         run: npm run export:web
 
       - name: Prepare static deployment
-        run: cp vercel.json dist/vercel.json
+        run: |
+          printf '%s\n' '{"buildCommand": null, "rewrites": [{"source": "/(.*)", "destination": "/index.html"}]}' > dist/vercel.json
 
       - name: Deploy to Vercel
         uses: amondnet/vercel-action@v20
