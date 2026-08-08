@@ -76,6 +76,9 @@ export function PhotoAnalyzer({
       const photo = await cameraRef.current.takePictureAsync({ base64: true, quality: 0.7 });
       if (photo?.base64) {
         await handleAnalyze(photo.base64, 'image/jpeg');
+      } else {
+        setError('Failed to capture photo. Please try again.');
+        setLoading(false);
       }
     } catch (e: any) {
       setError('Failed to capture photo.');

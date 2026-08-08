@@ -118,9 +118,9 @@ export function MacroSuggestion({
             </View>
           ) : result ? (
             <>
-              <View style={[styles.suggestionBanner, { backgroundColor: '#dcfce7' }]}>
-                <Text style={styles.suggestionText}>💡 {result.suggestion}</Text>
-                <Text style={styles.suggestionExplanation}>{result.explanation}</Text>
+              <View style={[styles.suggestionBanner, { backgroundColor: isDark ? '#14532d' : '#dcfce7' }]}>
+                <Text style={[styles.suggestionText, { color: isDark ? '#86efac' : '#166534' }]}>💡 {result.suggestion}</Text>
+                <Text style={[styles.suggestionExplanation, { color: isDark ? '#4ade80' : '#15803d' }]}>{result.explanation}</Text>
               </View>
               <ScrollView style={styles.resultsList}>
                 {result.items.map((item, i) => (
