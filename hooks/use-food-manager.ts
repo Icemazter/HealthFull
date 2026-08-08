@@ -124,6 +124,29 @@ export function useFoodManager() {
     [addEntry]
   );
 
+  const copyFromYesterday = useCallback(async () => {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    yesterday.setHours(0, 0, 0, 0);
+    const yesterdayEnd = new Date(yesterday);
+    yesterdayEnd.setHours(23, 59, 59, 999);
+
+    const yesterdayEntries = foodManager.history.filter(
+      (e) => e.timestamp >= yesterday.getTime() && e.timestamp <= yesterdayEnd.getTime()
+    );
+
+    const now = Date.now();
+    for (let i = 0; i < yesterdayEntries.length; i++) {
+      const entry = yesterdayEntries[i];
+      await foodManager.add({
+        ...entry,
+        id: `copy_${now}_${i}`,
+        timestamp: now + i,
+      });
+    }
+    return yesterdayEntries.length;
+  }, [foodManager]);
+
   const isFavorite = useCallback(
     (item: FoodEntry) => {
       return favorites.some(f => f.name === item.name && f.calories === item.calories);
@@ -143,6 +166,7 @@ export function useFoodManager() {
     addWater,
     toggleFavorite,
     addFavoriteToday,
+    copyFromYesterday,
     isFavorite,
   };
 }

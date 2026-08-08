@@ -2,7 +2,7 @@ import { Palette } from '@/constants/theme';
 import { useHistoryManager, usePersistedState } from '@/hooks/use-persisted-state';
 import { feedback, validate } from '@/utils/feedback';
 import { storage, STORAGE_KEYS } from '@/utils/storage';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useColorScheme, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -47,6 +47,28 @@ interface BodyStats {
   goal: TrainingGoal;
 }
 
+interface MacroCyclingDay {
+  calories: string;
+  protein: string;
+  carbs: string;
+  fat: string;
+  fiber: string;
+}
+
+interface MacroCycling {
+  enabled: boolean;
+  workoutDay: MacroCyclingDay;
+  restDay: MacroCyclingDay;
+  todayType: 'workout' | 'rest' | 'default';
+}
+
+const DEFAULT_MACRO_CYCLING: MacroCycling = {
+  enabled: false,
+  workoutDay: { calories: '2300', protein: '170', carbs: '260', fat: '65', fiber: '30' },
+  restDay: { calories: '1800', protein: '160', carbs: '170', fat: '65', fiber: '30' },
+  todayType: 'default',
+};
+
 export default function GoalsScreen() {
   const insets = useSafeAreaInsets();
   const systemColorScheme = useColorScheme();
@@ -81,6 +103,37 @@ export default function GoalsScreen() {
   const insulinManager = useHistoryManager<InsulinEntry>(STORAGE_KEYS.INSULIN_HISTORY);
   
   const weightManager = useHistoryManager<WeightEntry>(STORAGE_KEYS.WEIGHT_HISTORY);
+
+  const [openAIKey, setOpenAIKey] = usePersistedState<string>(STORAGE_KEYS.OPENAI_API_KEY, '');
+  const [macroCycling, setMacroCycling] = usePersistedState<MacroCycling>(
+    STORAGE_KEYS.MACRO_CYCLING,
+    DEFAULT_MACRO_CYCLING
+  );
+  const [showMacroCycling, setShowMacroCycling] = useState(false);
+
+  // Dynamic TDEE: estimate from weight history + food log using regression
+  const dynamicTDEE = useMemo(() => {
+    const weights = weightManager.history.slice(0, 30);
+    if (weights.length < 7) return null; // Need at least a week of data
+
+    // Load food data synchronously isn't possible here, so we use a simpler
+    // regression: weight change × 7700 kcal/kg over the period
+    const sortedWeights = [...weights].sort((a, b) => a.timestamp - b.timestamp);
+    const oldest = sortedWeights[0];
+    const newest = sortedWeights[sortedWeights.length - 1];
+    const deltaKg = parseFloat(newest.weight) - parseFloat(oldest.weight);
+    const deltaDays = (newest.timestamp - oldest.timestamp) / (1000 * 60 * 60 * 24);
+    if (deltaDays < 7) return null;
+
+    // We need average calories to compute TDEE from weight change
+    // TDEE = avg_intake - (deltaKg/days * 7700)
+    // Since we can't get async data here, just expose weight change trend
+    return {
+      weightChangeKgPerWeek: (deltaKg / deltaDays) * 7,
+      days: Math.round(deltaDays),
+      deltaKg: parseFloat(deltaKg.toFixed(2)),
+    };
+  }, [weightManager.history]);
 
   useEffect(() => {
     // Backfill fiber for users with older saved goals
@@ -243,6 +296,13 @@ export default function GoalsScreen() {
       [STORAGE_KEYS.BODY_STATS]: stats,
     });
     await feedback.success('Goals saved successfully!');
+  };
+
+  const applyMacroCyclingDay = async (type: 'workout' | 'rest') => {
+    const dayGoals = type === 'workout' ? macroCycling.workoutDay : macroCycling.restDay;
+    await setGoals({ ...goals, ...dayGoals });
+    await setMacroCycling({ ...macroCycling, todayType: type });
+    await feedback.success(`${type === 'workout' ? 'Workout' : 'Rest'} day targets applied!`);
   };
 
   const logWeight = async () => {
@@ -520,6 +580,144 @@ export default function GoalsScreen() {
 
       {/* Dark Mode */}
       <View style={[styles.card, isDark && styles.cardDark]}>
+      </View>
+
+      {/* Dynamic TDEE insight */}
+      {dynamicTDEE && (
+        <View style={[styles.card, isDark && styles.cardDark]}>
+          <Text style={[styles.cardTitle, isDark && styles.textDark]}>📊 Dynamic TDEE Insight</Text>
+          <Text style={[styles.label, isDark && styles.labelDark]}>
+            Based on {dynamicTDEE.days} days of weight data:
+          </Text>
+          <View style={[styles.tdeeRow]}>
+            <View style={styles.tdeeBox}>
+              <Text style={[styles.tdeeValue, { color: dynamicTDEE.weightChangeKgPerWeek < -0.1 ? Palette.success : dynamicTDEE.weightChangeKgPerWeek > 0.1 ? Palette.error : Palette.primary }]}>
+                {dynamicTDEE.weightChangeKgPerWeek > 0 ? '+' : ''}{dynamicTDEE.weightChangeKgPerWeek.toFixed(2)} kg/wk
+              </Text>
+              <Text style={[styles.tdeeLabel, isDark && styles.labelDark]}>Weight Change</Text>
+            </View>
+            <View style={styles.tdeeBox}>
+              <Text style={[styles.tdeeValue, { color: Palette.primary }]}>
+                {dynamicTDEE.deltaKg > 0 ? '+' : ''}{dynamicTDEE.deltaKg} kg
+              </Text>
+              <Text style={[styles.tdeeLabel, isDark && styles.labelDark]}>Total Change</Text>
+            </View>
+          </View>
+          <Text style={[styles.tdeeHint, isDark && styles.labelDark]}>
+            {Math.abs(dynamicTDEE.weightChangeKgPerWeek) < 0.1
+              ? '✅ Your weight is stable — you\'re near energy balance.'
+              : dynamicTDEE.weightChangeKgPerWeek < 0
+              ? `📉 You\'re losing ~${Math.abs(dynamicTDEE.weightChangeKgPerWeek).toFixed(2)} kg/week. If this is faster than desired, increase your calorie goal.`
+              : `📈 You\'re gaining ~${dynamicTDEE.weightChangeKgPerWeek.toFixed(2)} kg/week. If this is faster than desired, reduce your calorie goal.`}
+          </Text>
+        </View>
+      )}
+
+      {/* Macro Cycling */}
+      <View style={[styles.card, isDark && styles.cardDark]}>
+        <View style={styles.bodyHeaderRow}>
+          <Text style={[styles.cardTitle, isDark && styles.textDark]}>🔄 Macro Cycling</Text>
+          <Pressable
+            style={[styles.toggleButton, isDark && styles.toggleButtonDark, macroCycling.enabled && styles.toggleButtonActive]}
+            onPress={() => setMacroCycling({ ...macroCycling, enabled: !macroCycling.enabled })}>
+            <Text style={[styles.toggleButtonText, isDark && styles.toggleButtonTextDark, macroCycling.enabled && { color: '#fff' }]}>
+              {macroCycling.enabled ? 'On' : 'Off'}
+            </Text>
+          </Pressable>
+        </View>
+
+        {macroCycling.enabled && (
+          <>
+            <Text style={[styles.activityHint, isDark && styles.activityHintDark]}>
+              Set different calorie/macro targets for workout vs. rest days. Tap a day type to instantly apply those targets to your active goals.
+            </Text>
+
+            <View style={styles.cyclingDayRow}>
+              <Pressable
+                style={[styles.cyclingDayBtn, macroCycling.todayType === 'workout' && styles.cyclingDayActive]}
+                onPress={() => applyMacroCyclingDay('workout')}>
+                <Text style={[styles.cyclingDayLabel, macroCycling.todayType === 'workout' && styles.cyclingDayLabelActive]}>💪 Workout Day</Text>
+                <Text style={[styles.cyclingDayCals, isDark && styles.labelDark]}>{macroCycling.workoutDay.calories} kcal</Text>
+                <Text style={[styles.cyclingDayMacros, isDark && styles.labelDark]}>P:{macroCycling.workoutDay.protein} C:{macroCycling.workoutDay.carbs} F:{macroCycling.workoutDay.fat}</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.cyclingDayBtn, macroCycling.todayType === 'rest' && styles.cyclingDayActive]}
+                onPress={() => applyMacroCyclingDay('rest')}>
+                <Text style={[styles.cyclingDayLabel, macroCycling.todayType === 'rest' && styles.cyclingDayLabelActive]}>😴 Rest Day</Text>
+                <Text style={[styles.cyclingDayCals, isDark && styles.labelDark]}>{macroCycling.restDay.calories} kcal</Text>
+                <Text style={[styles.cyclingDayMacros, isDark && styles.labelDark]}>P:{macroCycling.restDay.protein} C:{macroCycling.restDay.carbs} F:{macroCycling.restDay.fat}</Text>
+              </Pressable>
+            </View>
+
+            <Pressable
+              style={styles.expandButton}
+              onPress={() => setShowMacroCycling(!showMacroCycling)}>
+              <Text style={[styles.expandButtonText, isDark && styles.textDark]}>
+                {showMacroCycling ? '▼ Hide targets' : '▶ Edit targets'}
+              </Text>
+            </Pressable>
+
+            {showMacroCycling && (
+              <View style={styles.cyclingEditBox}>
+                {(['workoutDay', 'restDay'] as const).map((dayType) => (
+                  <View key={dayType} style={styles.cyclingEditSection}>
+                    <Text style={[styles.label, isDark && styles.labelDark]}>
+                      {dayType === 'workoutDay' ? '💪 Workout Day' : '😴 Rest Day'}
+                    </Text>
+                    {(['calories', 'protein', 'carbs', 'fat', 'fiber'] as const).map((macro) => (
+                      <View key={macro} style={styles.inlineRow}>
+                        <Text style={[styles.cyclingMacroLabel, isDark && styles.labelDark]}>
+                          {macro.charAt(0).toUpperCase() + macro.slice(1)}
+                        </Text>
+                        <TextInput
+                          style={[styles.cyclingInput, isDark && styles.inputDark]}
+                          value={macroCycling[dayType][macro]}
+                          onChangeText={(v) =>
+                            setMacroCycling({
+                              ...macroCycling,
+                              [dayType]: { ...macroCycling[dayType], [macro]: v },
+                            })
+                          }
+                          keyboardType="number-pad"
+                          placeholder="0"
+                          placeholderTextColor={isDark ? '#666' : '#999'}
+                        />
+                      </View>
+                    ))}
+                  </View>
+                ))}
+              </View>
+            )}
+          </>
+        )}
+      </View>
+
+      {/* AI Settings */}
+      <View style={[styles.card, isDark && styles.cardDark]}>
+        <Text style={[styles.cardTitle, isDark && styles.textDark]}>🤖 AI Settings</Text>
+        <Text style={[styles.activityHint, isDark && styles.activityHintDark]}>
+          Enter your OpenAI API key to enable AI food logging, photo analysis, and smart macro suggestions. Your key is stored locally and never shared.
+        </Text>
+        <View style={styles.inputGroup}>
+          <Text style={[styles.label, isDark && styles.labelDark]}>OpenAI API Key</Text>
+          <TextInput
+            style={[styles.input, isDark && styles.inputDark]}
+            value={openAIKey}
+            onChangeText={setOpenAIKey}
+            placeholder="sk-..."
+            placeholderTextColor={isDark ? '#666' : '#999'}
+            secureTextEntry
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+        </View>
+        {openAIKey ? (
+          <Text style={[styles.apiKeyStatus, { color: Palette.success }]}>✅ API key saved</Text>
+        ) : (
+          <Text style={[styles.apiKeyStatus, { color: Palette.gray }]}>
+            Get a key at platform.openai.com
+          </Text>
+        )}
       </View>
 
       {/* Diabetes Management */}
@@ -1076,5 +1274,94 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: 'bold',
     padding: 8,
+  },
+  tdeeRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginVertical: 12,
+  },
+  tdeeBox: {
+    flex: 1,
+    backgroundColor: '#f0f4ff',
+    borderRadius: 10,
+    padding: 12,
+    alignItems: 'center',
+  },
+  tdeeValue: {
+    fontSize: 22,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  tdeeLabel: {
+    fontSize: 12,
+    color: Palette.gray,
+  },
+  tdeeHint: {
+    fontSize: 13,
+    lineHeight: 20,
+    color: Palette.darkGray,
+  },
+  cyclingDayRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginVertical: 12,
+  },
+  cyclingDayBtn: {
+    flex: 1,
+    borderRadius: 12,
+    padding: 14,
+    backgroundColor: '#f3f4f6',
+    borderWidth: 1.5,
+    borderColor: '#e5e7eb',
+  },
+  cyclingDayActive: {
+    backgroundColor: '#eff6ff',
+    borderColor: Palette.primary,
+  },
+  cyclingDayLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#374151',
+    marginBottom: 4,
+  },
+  cyclingDayLabelActive: {
+    color: Palette.primary,
+  },
+  cyclingDayCals: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Palette.primary,
+    marginBottom: 2,
+  },
+  cyclingDayMacros: {
+    fontSize: 11,
+    color: Palette.gray,
+  },
+  cyclingEditBox: {
+    marginTop: 8,
+    gap: 16,
+  },
+  cyclingEditSection: {
+    gap: 8,
+  },
+  cyclingMacroLabel: {
+    width: 70,
+    fontSize: 13,
+    fontWeight: '600',
+    color: Palette.darkGray,
+  },
+  cyclingInput: {
+    flex: 1,
+    backgroundColor: Palette.lightGray2,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    fontSize: 14,
+    borderWidth: 1,
+    borderColor: '#e5e5e5',
+  },
+  apiKeyStatus: {
+    fontSize: 13,
+    marginTop: 4,
   },
 });
